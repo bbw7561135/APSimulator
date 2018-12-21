@@ -97,12 +97,25 @@ class FraunhoferDiffractionOptics:
         self.image_grid_cell_height = self.focal_length/(self.n_grid_cells_y*self.normalized_grid_cell_height)
 
         # The image plane coordinates are proportional to the spatial frequencies of the aperture grid
-        self.image_x_coordinates = np.arange(-self.n_grid_cells_x//2, self.n_grid_cells_x//2)*self.image_grid_cell_width
-        self.image_y_coordinates = np.arange(-self.n_grid_cells_y//2, self.n_grid_cells_y//2)*self.image_grid_cell_height
+        full_image_x_coordinates = (np.arange(self.n_grid_cells_x) - (self.n_grid_cells_x - 1)/2)*self.image_grid_cell_width
+        full_image_y_coordinates = (np.arange(self.n_grid_cells_y) - (self.n_grid_cells_x - 1)/2)*self.image_grid_cell_height
 
         # Compute corresponding angles with respect to the optical axis
-        self.image_angular_x_coordinates = np.arctan2(self.image_x_coordinates, self.focal_length)
-        self.image_angular_y_coordinates = np.arctan2(self.image_y_coordinates, self.focal_length)
+        full_image_angular_x_coordinates = np.arctan2(full_image_x_coordinates, self.focal_length)
+        full_image_angular_y_coordinates = np.arctan2(full_image_y_coordinates, self.focal_length)
+
+        # Compute index ranges for the part of the image spanning the field of view.
+        # Outside these ranges, sources will have been filtered out from the incident field.
+        # They must still be included in the Fourier transform since we want to have square
+        # cells in both the aperture and image grids.
+        self.image_idx_range_x = np.searchsorted(full_image_angular_x_coordinates, (-self.field_of_view_x/2, self.field_of_view_x/2))
+        self.image_idx_range_y = np.searchsorted(full_image_angular_y_coordinates, (-self.field_of_view_y/2, self.field_of_view_y/2))
+
+        self.image_x_coordinates = full_image_x_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        self.image_y_coordinates = full_image_y_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+
+        self.image_angular_x_coordinates = full_image_angular_x_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        self.image_angular_y_coordinates = full_image_angular_y_coordinates[self.image_idx_range_y[0]:self.image_idx_range_y[1]]
 
     def get_incident_light_field(self):
         return self.incident_light_field
@@ -157,8 +170,12 @@ class FraunhoferDiffractionOptics:
         # origin of the image plane coordinates in the center
         fourier_coefficients = np.fft.fftshift(np.fft.fft2(field_values, axes=(1, 2)), axes=(1, 2))
 
+        # Trim the image to only include the specified field of view
+        trimmed_fourier_coefficients = fourier_coefficients[:, self.image_idx_range_y[0]:self.image_idx_range_y[1],
+                                                               self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+
         # Square the Fourier coefficients and multiply with a wavelength-dependent scale that ensures energy conservation
-        image_fluxes = (fourier_coefficients*np.conj(fourier_coefficients)).real*self.flux_scales[:, np.newaxis, np.newaxis]
+        image_fluxes = (trimmed_fourier_coefficients*np.conj(trimmed_fourier_coefficients)).real*self.flux_scales[:, np.newaxis, np.newaxis]
 
         return image_fluxes
 
@@ -181,7 +198,7 @@ class FraunhoferDiffractionOptics:
                      field_of_view_y=self.field_of_view_y,
                      max_angular_coarseness=self.max_angular_coarseness)
 
-    def visualize(self, image_fluxes, approximate_wavelength, output_path=None):
+    def visualize(self, image_fluxes, approximate_wavelength, output_path=None, verify_energy_conservation=False):
         '''
         Plots the given image plane flux distribution.
         '''
@@ -192,11 +209,19 @@ class FraunhoferDiffractionOptics:
 
         monochromatic_image_fluxes = image_fluxes[wavelength_idx, :, :]
 
-        angular_extent = [self.image_angular_x_coordinates[0]*206264.806, self.image_angular_x_coordinates[-1]*206264.806,
-                          self.image_angular_y_coordinates[0]*206264.806, self.image_angular_y_coordinates[-1]*206264.806]
+        arcsec_from_radian = 206264.806
+        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
+                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])*arcsec_from_radian
 
-        print(1.22*wavelength/self.aperture_diameter*206264.806)
+        print('Rayleigh limit: {:g}\"'.format(1.22*wavelength/self.aperture_diameter*arcsec_from_radian))
 
+        if verify_energy_conservation:
+            monochromatic_incident_field = self.incident_light_field.get()[wavelength_idx, :, :]
+            incident_spectral_power = np.sum((monochromatic_incident_field*np.conj(monochromatic_incident_field)).real)\
+                                      *(self.normalized_grid_cell_width*self.normalized_grid_cell_height*wavelength**2)
+            diffracted_spectral_power = np.sum(monochromatic_image_fluxes)*(self.image_grid_cell_width*self.image_grid_cell_height)
+            print('Incident spectral power: {:g} W/m\nDiffracted spectral power: {:g} W/m\nRelative energy loss: {:g} %'
+                  .format(incident_spectral_power, diffracted_spectral_power, 100*(1 - diffracted_spectral_power/incident_spectral_power)))
 
         fig, ax = plt.subplots()
 
@@ -204,9 +229,9 @@ class FraunhoferDiffractionOptics:
                           origin='lower',
                           interpolation='none',
                           cmap=plt.get_cmap('gray'),
-                          extent=spatial_extent)
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$y$ [m]')
+                          extent=angular_extent)
+        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
+        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
         ax.set_title(r'Image fluxes ($\lambda = {:.1f}$ nm)'.format(wavelength*1e9))
 
         # Add colorbars
@@ -267,10 +292,10 @@ def test():
     polar_angles, azimuth_angles = target.get_spherical_direction_angles()
     incident_spectral_fluxes = np.swapaxes(target_info.get_incident_field_amplitudes()**2, 0, 1)
     max_angular_coarseness = 0.3*Constants.arcsec_to_radian
-    optics = FraunhoferDiffractionOptics(aperture_diameter, 0.75, FOV, FOV, max_angular_coarseness, Constants.wavelengths)
+    optics = FraunhoferDiffractionOptics(aperture_diameter, 0.75, FOV, FOV/2, max_angular_coarseness, Constants.wavelengths)
     optics.add_point_sources(polar_angles, azimuth_angles, incident_spectral_fluxes)
     optics.apply_transmission_mask(transmission_mask_function)
-    optics.get_incident_light_field().visualize(500e-9)
+    optics.get_incident_light_field().visualize(400e-9)
     image_fluxes = optics.compute_image_fluxes()
     optics.visualize(image_fluxes, 500e-9)
 
