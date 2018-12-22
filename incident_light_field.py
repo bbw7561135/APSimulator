@@ -4,40 +4,8 @@ from numba import jit
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors
-from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
-
-
-def angular_coordinates_from_spherical_angles(polar_angle, azimuth_angle):
-    '''
-    Computes the angular x- and y-coordinate of a direction given by a
-    spherical polar and azimuth angle.
-    '''
-    angular_x_coordinate = polar_angle*np.cos(azimuth_angle)
-    angular_y_coordinate = polar_angle*np.sin(azimuth_angle)
-    return angular_x_coordinate, angular_y_coordinate
-
-
-def direction_vector_from_spherical_angles(polar_angle, azimuth_angle):
-    '''
-    Computes the x- and y-component of the unit vector in the direction given by
-    a spherical polar and azimuth angle.
-    '''
-    sin_polar_angle = np.sin(polar_angle)
-    direction_vector_x = sin_polar_angle*np.cos(azimuth_angle)
-    direction_vector_y = sin_polar_angle*np.sin(azimuth_angle)
-    return direction_vector_x, direction_vector_y
-
-
-def direction_vector_from_angular_coordinates(angular_x_coordinate, angular_y_coordinate):
-    '''
-    Computes the x- and y-component of the unit vector in the direction given by
-    angular x- and y-coordinates.
-    '''
-    polar_angle = np.sqrt(angular_x_coordinate**2 + angular_y_coordinate**2)
-    scale = np.sinc(polar_angle/np.pi) # This is just sin(polar_angle)/polar_angle, but this form handles zero limit automatically
-    direction_vector_x = angular_x_coordinate*scale
-    direction_vector_y = angular_y_coordinate*scale
-    return direction_vector_x, direction_vector_y
+import math_utils
+import plot_utils
 
 
 def spatial_from_normalized_coordinates(normalized_x_coordinate, normalized_y_coordinate, wavelength):
@@ -123,14 +91,14 @@ class IncidentLightField:
         assert incident_spectral_fluxes.shape == (self.n_wavelengths, n_sources)
 
         # Create mask to select sources inside the field of view
-        angular_x_coordinates, angular_y_coordinates = angular_coordinates_from_spherical_angles(polar_angles, azimuth_angles)
+        angular_x_coordinates, angular_y_coordinates = math_utils.angular_coordinates_from_spherical_angles(polar_angles, azimuth_angles)
 
         is_inside_FOV = np.logical_and(np.abs(angular_x_coordinates) <= field_of_view_x/2,
                                        np.abs(angular_y_coordinates) <= field_of_view_y/2)
 
         # Compute x- and y-components of the wave vectors of the plane waves
-        direction_vectors_x, direction_vectors_y = direction_vector_from_spherical_angles(polar_angles[is_inside_FOV],
-                                                                                          azimuth_angles[is_inside_FOV])
+        direction_vectors_x, direction_vectors_y = math_utils.direction_vector_from_spherical_angles(polar_angles[is_inside_FOV],
+                                                                                                     azimuth_angles[is_inside_FOV])
 
         wave_amplitudes = np.sqrt(incident_spectral_fluxes[:, is_inside_FOV]) # [sqrt(W/m^2/m)]
 
@@ -156,10 +124,10 @@ class IncidentLightField:
 
         # Compute x- and y-components of the wave vectors of the plane waves
         direction_vectors_x, \
-            direction_vectors_y = direction_vector_from_angular_coordinates(angular_x_coordinate_mesh[idx_range_y[0]:idx_range_y[1],
-                                                                                                      idx_range_x[0]:idx_range_x[1]],
-                                                                            angular_y_coordinate_mesh[idx_range_y[0]:idx_range_y[1],
-                                                                                                      idx_range_x[0]:idx_range_x[1]])
+            direction_vectors_y = math_utils.direction_vector_from_angular_coordinates(angular_x_coordinate_mesh[idx_range_y[0]:idx_range_y[1],
+                                                                                                                 idx_range_x[0]:idx_range_x[1]],
+                                                                                       angular_y_coordinate_mesh[idx_range_y[0]:idx_range_y[1],
+                                                                                                                 idx_range_x[0]:idx_range_x[1]])
 
         wave_amplitudes = np.sqrt(incident_spectral_fluxes[:, idx_range_y[0]:idx_range_y[1], idx_range_x[0]:idx_range_x[1]]) # [sqrt(W/m^2/m)]
 
@@ -237,10 +205,10 @@ class IncidentLightField:
         right_ax = fig.add_subplot(122)
 
         amplitude_image = left_ax.imshow(amplitudes,
+                                         extent=spatial_extent,
                                          origin='lower',
                                          interpolation='none',
-                                         cmap=plt.get_cmap('gray'),
-                                         extent=spatial_extent)
+                                         cmap=plt.get_cmap('gray'))
         left_ax.set_xlabel(r'$x$ [m]')
         left_ax.set_ylabel(r'$y$ [m]')
         left_ax.set_title(r'Incident light field amplitudes ($\lambda = {:.1f}$ nm)'.format(wavelength*1e9))
@@ -248,27 +216,18 @@ class IncidentLightField:
         angle_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('angle_cmap', ['black', 'white', 'black'])
 
         phase_image = right_ax.imshow(phases,
+                                      extent=spatial_extent,
                                       origin='lower',
-                                      interpolation='none',
-                                      cmap=angle_cmap,
                                       vmin=-np.pi, vmax=np.pi,
-                                      extent=spatial_extent)
+                                      interpolation='none',
+                                      cmap=angle_cmap)
         right_ax.set_xlabel(r'$x$ [m]')
         right_ax.set_ylabel(r'$y$ [m]')
         right_ax.set_title(r'Incident light field phases ($\lambda = {:.1f}$ nm)'.format(wavelength*1e9))
 
         # Add colorbars
-        width = axes_size.AxesY(left_ax, aspect=0.05)
-        pad = axes_size.Fraction(0.4, width)
-        divider = make_axes_locatable(left_ax)
-        cax = divider.append_axes('right', size=width, pad=pad)
-        fig.colorbar(amplitude_image, cax=cax, label='Amplitude [sqrt(W/m^2/m)]')
-
-        width = axes_size.AxesY(right_ax, aspect=0.05)
-        pad = axes_size.Fraction(0.4, width)
-        divider = make_axes_locatable(right_ax)
-        cax = divider.append_axes('right', size=width, pad=pad)
-        fig.colorbar(phase_image, cax=cax, label='Phase [rad]')
+        plot_utils.add_colorbar(fig, left_ax, amplitude_image, label='Amplitude [sqrt(W/m^2/m)]')
+        plot_utils.add_colorbar(fig, right_ax, phase_image, label='Phase [rad]')
 
         plt.tight_layout()
 
