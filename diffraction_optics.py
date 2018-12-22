@@ -3,12 +3,9 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 from incident_light_field import IncidentLightField
-
-
-def nearest_higher_power_of_2(number):
-    return 2**int(np.ceil(np.log2(number)))
+import math_utils
+import plot_utils
 
 
 class FraunhoferDiffractionOptics:
@@ -58,7 +55,7 @@ class FraunhoferDiffractionOptics:
         self.normalized_grid_cell_extent = 1/(2*np.tan(self.max_field_of_view/2))
 
         # Compute the required number of cells in the aperture grid to achieve the desired angular resolution
-        self.n_grid_cells = nearest_higher_power_of_2(1/(self.max_angular_coarseness*self.normalized_grid_cell_extent))
+        self.n_grid_cells = math_utils.nearest_higher_power_of_2(1/(self.max_angular_coarseness*self.normalized_grid_cell_extent))
 
         # The origin of the aperture coordinates is at the center of the grid
         self.normalized_coordinates = np.arange(-self.n_grid_cells//2, self.n_grid_cells//2)*self.normalized_grid_cell_extent
@@ -119,6 +116,9 @@ class FraunhoferDiffractionOptics:
 
     def get_aperture_diameter(self):
         return self.aperture_diameter
+
+    def get_focal_length(self):
+        return self.focal_length
 
     def get_n_aperture_grid_cells(self):
         return self.n_grid_cells_across_aperture
@@ -201,7 +201,7 @@ class FraunhoferDiffractionOptics:
                      field_of_view_y=self.field_of_view_y,
                      max_angular_coarseness=self.max_angular_coarseness)
 
-    def visualize_image(self, approximate_wavelength, field_stage='modulated', use_amplitude=False, verify_energy_conservation=False, output_path=None):
+    def visualize_monochromatic_image(self, approximate_wavelength, field_stage='modulated', use_amplitude=False, verify_energy_conservation=False, output_path=None):
         '''
         Plots the given image plane flux distribution.
         '''
@@ -213,11 +213,10 @@ class FraunhoferDiffractionOptics:
         image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
         monochromatic_image_fluxes = image_fluxes[wavelength_idx, :, :]
 
-        arcsec_from_radian = 206264.806
         angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
-                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])*arcsec_from_radian
+                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
 
-        print('Rayleigh limit: {:g}\"'.format(1.22*wavelength/self.aperture_diameter*arcsec_from_radian))
+        print('Rayleigh limit: {:g}\"'.format(math_utils.arcsec_from_radian(1.22*wavelength/self.aperture_diameter)))
 
         if verify_energy_conservation:
             monochromatic_incident_field = self.incident_light_field.get(field_stage)[wavelength_idx, :, :]
@@ -230,20 +229,15 @@ class FraunhoferDiffractionOptics:
         fig, ax = plt.subplots()
 
         image = ax.imshow(np.sqrt(monochromatic_image_fluxes) if use_amplitude else monochromatic_image_fluxes,
+                          extent=math_utils.arcsec_from_radian(angular_extent),
                           origin='lower',
                           interpolation='none',
-                          cmap=plt.get_cmap('gray'),
-                          extent=angular_extent)
+                          cmap=plt.get_cmap('gray'))
         ax.set_xlabel(r'$\alpha_x$ [arcsec]')
         ax.set_ylabel(r'$\alpha_y$ [arcsec]')
         ax.set_title(r'Image fluxes ($\lambda = {:.1f}$ nm)'.format(wavelength*1e9))
 
-        # Add colorbars
-        width = axes_size.AxesY(ax, aspect=0.05)
-        pad = axes_size.Fraction(0.4, width)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size=width, pad=pad)
-        fig.colorbar(image, cax=cax, label='Flux [W/m^2/m]')
+        plot_utils.add_colorbar(fig, ax, image, label='Flux [W/m^2/m]')
 
         plt.tight_layout()
 
@@ -252,7 +246,39 @@ class FraunhoferDiffractionOptics:
         else:
             plt.savefig(output_path)
 
-    def animate_image(self, phase_screen, time_step_scale, duration, approximate_wavelength, accumulate=False, savename=False):
+    def visualize_color_image(self, filter_set, clipping_factor=1, field_stage='modulated', output_path=None):
+        '''
+        Plots the given image plane flux distribution.
+        '''
+
+        image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
+        filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, image_fluxes)
+        filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
+        vmin = np.min(filtered_flux_array)
+        vmax = np.max(filtered_flux_array)*clipping_factor
+        scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
+
+        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
+                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
+
+        fig, ax = plt.subplots()
+
+        image = ax.imshow(scaled_color_image,
+                          extent=math_utils.arcsec_from_radian(angular_extent),
+                          origin='lower',
+                          interpolation='none')
+        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
+        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
+        ax.set_title('Diffracted color image')
+
+        plt.tight_layout()
+
+        if output_path is None:
+            plt.show()
+        else:
+            plt.savefig(output_path)
+
+    def animate_image(self, phase_screen, time_step_scale, duration, approximate_wavelength, accumulate=False, output_path=False):
 
         time_step = time_step_scale*phase_screen.coherence_time
         n_time_steps = int(np.ceil(duration/time_step)) + 1
@@ -270,9 +296,8 @@ class FraunhoferDiffractionOptics:
 
         self.integrated_image_fluxes = np.zeros(monochromatic_image_fluxes.shape)
 
-        arcsec_from_radian = 206264.806
         angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
-                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])*arcsec_from_radian
+                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
 
         title = ''
 
@@ -286,49 +311,43 @@ class FraunhoferDiffractionOptics:
         ax.set_ylabel(r'$y$ [m]')
         ax.set_title('{}'.format(title))
 
-        im = ax.imshow(monochromatic_image_fluxes,
-                       extent=angular_extent,
-                       vmin=vmin, vmax=vmax,
-                       origin='lower',
-                       aspect='auto',
-                       animated=True,
-                       interpolation='none',
-                       cmap=plt.get_cmap('gray'))
+        image = ax.imshow(monochromatic_image_fluxes,
+                          extent=math_utils.arcsec_from_radian(angular_extent),
+                          origin='lower',
+                          #aspect='auto',
+                          vmin=vmin, vmax=vmax,
+                          interpolation='none',
+                          cmap=plt.get_cmap('gray'),
+                          animated=True)
 
-        xleft, xright = ax.get_xlim()
-        ybottom, ytop = ax.get_ylim()
-        ax.set_aspect(abs((xright-xleft)/(ybottom-ytop)))
+        #plot_utils.set_axis_aspect(1)
 
-        width = axes_size.AxesY(ax, aspect=0.05)
-        pad = axes_size.Fraction(0.4, width)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size=width, pad=pad)
-        fig.colorbar(im, cax=cax, label='Intensity [W/m^2/m]')
+        plot_utils.add_colorbar(fig, ax, image, label='Flux [W/m^2/m]')
 
         time_text = ax.text(0.01, 0.99, '', color='white', ha='left', va='top', transform=ax.transAxes)
 
         plt.tight_layout(pad=1)
 
         def init():
-            return im, time_text
+            return image, time_text
 
         def update(time_idx):
-            print(time_idx)
+            print('Frame {:d}/{:d}'.format(time_idx, n_time_steps))
             phase_screen.move_phase_screen(time_step)
             self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
             monochromatic_image_fluxes = self.compute_image_fluxes()[wavelength_idx, :, :]
             self.integrated_image_fluxes += monochromatic_image_fluxes
-            im.set_array(self.integrated_image_fluxes/(time_idx+1) if accumulate else monochromatic_image_fluxes)
+            image.set_array(self.integrated_image_fluxes/(time_idx+1) if accumulate else monochromatic_image_fluxes)
             time_text.set_text('time: {:g} s'.format(phase_screen.time))
 
-            return im, time_text
+            return image, time_text
 
         anim = animation.FuncAnimation(fig, update, init_func=init, blit=True, frames=np.arange(n_time_steps))
 
-        if savename:
-            anim.save(savename, writer=animation.FFMpegWriter(fps=30,
-                                                              bitrate=3200,
-                                                              extra_args=['-vcodec', 'libx264']))
+        if output_path:
+            anim.save(output_path, writer=animation.FFMpegWriter(fps=30,
+                                                                 bitrate=3200,
+                                                                 extra_args=['-vcodec', 'libx264']))
         else:
             plt.show()
 
@@ -356,12 +375,21 @@ def test():
 
     from APSimulator import Constants, StarCluster
     from turbulence import TurbulencePhaseScreen, MovingTurbulencePhaseScreen
+    from filters import Filter, FilterSet
 
-    n_stars = 1
-    FOV_arcsec = 10
+    n_stars = 1#0000
+    FOV_x = math_utils.radian_from_arcsec(15)
+    FOV_y = math_utils.radian_from_arcsec(15)
     aperture_diameter = 0.15
     secondary_diameter = 0#0.2*aperture_diameter
     spider_wane_width = 0#0.01*aperture_diameter
+    focal_length = 0.75
+    max_angular_coarseness = math_utils.radian_from_arcsec(0.1)
+    fried_parameter_500 = 0.08
+    n_subharmonic_levels = 0
+    wind_speed = 10.0
+    zenith_angle = 0.0
+    view_wavelength = 700e-9
 
     def transmission_mask_function(x, y):
         r = np.sqrt(x**2 + y**2)
@@ -370,34 +398,34 @@ def test():
                                       np.abs(x) >= spider_wane_width,
                                       np.abs(y) >= spider_wane_width))
 
-    FOV = FOV_arcsec*Constants.arcsec_to_radian
     target = StarCluster(n_stars, 4, (3000, 30000), (1e-2, 2.0e4), 2e4)
     #target.plot_angular_distribution(FOV_box_halfwidth=FOV_arcsec/2)
     target_info = target.get_target_info()
     polar_angles, azimuth_angles = target.get_spherical_direction_angles()
     incident_spectral_fluxes = np.swapaxes(target_info.get_incident_field_amplitudes()**2, 0, 1)
-    max_angular_coarseness = 0.1*Constants.arcsec_to_radian
 
-    optics = FraunhoferDiffractionOptics(aperture_diameter, 0.75, FOV, FOV, max_angular_coarseness, Constants.wavelengths)
+    optics = FraunhoferDiffractionOptics(aperture_diameter, focal_length, FOV_x, FOV_y, max_angular_coarseness, Constants.wavelengths)
     optics.add_point_sources(polar_angles, azimuth_angles, incident_spectral_fluxes)
     optics.apply_transmission_mask(transmission_mask_function)
 
-    turbulence = TurbulencePhaseScreen(0.05, 500e-9, 0, 5, Constants.wavelengths)
-    #turbulence = MovingTurbulencePhaseScreen(0.05, 500e-9, 0, 10.0, 5, Constants.wavelengths)
+    turbulence = TurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, n_subharmonic_levels, Constants.wavelengths)
+    #turbulence = MovingTurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, wind_speed, n_subharmonic_levels, Constants.wavelengths)
     turbulence.initialize(optics)
 
-    wavelength = 700e-9
+    #filter_set = FilterSet(red=Filter(595e-9, 680e-9), green=Filter(500e-9, 575e-9), blue=Filter(420e-9, 505e-9))
+    filter_set = FilterSet(red=Filter(400e-9, 405e-9), green=Filter(550e-9, 555e-9), blue=Filter(690e-9, 695e-9))
+
     optics.modulate_incident_light_field(turbulence.compute_analytical_modulation_transfer_function())
-    print(206264.806*0.98*wavelength/turbulence.get_fried_parameter(wavelength, 0))
+    print(math_utils.arcsec_from_radian(0.98*view_wavelength/turbulence.get_fried_parameter(view_wavelength, zenith_angle)))
 
-    #optics.get_incident_light_field().visualize(500e-9)
-    #optics.visualize_image(wavelength, use_amplitude=0)
-    #optics.visualize_image(500e-9, use_amplitude=1, field_stage='masked', verify_energy_conservation=True)
+    optics.get_incident_light_field().visualize(view_wavelength)
+    #optics.visualize_monochromatic_image(view_wavelength, use_amplitude=0)
+    optics.visualize_monochromatic_image(view_wavelength, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
+    #optics.visualize_color_image(filter_set, clipping_factor=1, field_stage='modulated')
+    #turbulence.plot_structure_function_comparison(view_wavelength)
 
-    turbulence.plot_structure_function_comparison(500e-9)
-    #turbulence.animate(2, 0.2, 500e-9, savename='phase_screen.mp4')
-
-    #optics.animate_image(turbulence, 2, 1, 500e-9, accumulate=True, savename='image2.mp4')
+    #turbulence.animate(2, 0.2, view_wavelength, savename='phase_screen.mp4')
+    #optics.animate_image(turbulence, 2, 1, view_wavelength, accumulate=True, savename='image2.mp4')
 
 if __name__ == '__main__':
     test()
