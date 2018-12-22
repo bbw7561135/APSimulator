@@ -109,6 +109,9 @@ class IncidentLightField:
         # Create data cube for spectral and spatial distribution of complex incident field values [sqrt(W/m^2/m)]
         self.field_values = np.zeros((self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_y), dtype='complex128')
 
+        # Store different versions of the field, so that modified versions of the field can be held together with unmodified one
+        self.fields = {'pure': self.field_values, 'masked': self.field_values, 'modulated': self.field_values}
+
     def add_point_sources(self, polar_angles, azimuth_angles, incident_spectral_fluxes, field_of_view_x, field_of_view_y):
         '''
         Arguments: Polar angles of sources [rad]                               (float[n_sources])
@@ -165,13 +168,19 @@ class IncidentLightField:
                         self.normalized_x_coordinate_mesh, self.normalized_y_coordinate_mesh,
                         np.ravel(direction_vectors_x), np.ravel(direction_vectors_y))
 
-    def apply_transmission_masks(self, transmission_masks):
-        assert transmission_masks.dtype == 'bool'
-        assert transmission_masks.shape == (self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x)
-        self.field_values[:, :, :] *= transmission_masks
+    def apply_transmission_mask(self, transmission_mask):
+        assert transmission_mask.dtype == 'bool'
+        assert transmission_mask.shape == (self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x)
+        self.fields['masked'] = self.field_values*transmission_mask
+        self.fields['modulated'] = self.fields['masked']
 
-    def get(self):
-        return self.field_values
+    def modulate(self, modulation):
+        assert modulation.shape == (self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x)
+        self.fields['modulated'] = self.fields['masked']*modulation
+
+    def get(self, field_stage):
+        assert field_stage in self.fields
+        return self.fields[field_stage]
 
     def get_wavelengths(self):
         return self.wavelengths
@@ -180,9 +189,13 @@ class IncidentLightField:
         assert field_values.dtype == self.field_values.dtype
         assert field_values.shape == self.field_values.shape
         self.field_values = field_values # This does not copy the data, it only modifies the reference
+        self.fields['masked'] = self.field_values
+        self.fields['modulated'] = self.field_values
 
     def clear(self):
         self.field_values[:, :, :] = 0 + 0j
+        self.fields['masked'] = self.field_values
+        self.fields['modulated'] = self.field_values
 
     def save(self, output_path, compressed=False):
         if compressed:
@@ -198,7 +211,7 @@ class IncidentLightField:
                      wavelengths=self.wavelengths,
                      field_values=self.field_values)
 
-    def visualize(self, approximate_wavelength, output_path=None):
+    def visualize(self, approximate_wavelength, field_stage='modulated', output_path=None):
         '''
         Plots the amplitudes and phases of the incident light field on the normalized grid.
         '''
@@ -207,8 +220,8 @@ class IncidentLightField:
         wavelength_idx = np.argmin(np.abs(self.wavelengths - approximate_wavelength))
         wavelength = self.wavelengths[wavelength_idx]
 
-        amplitudes = np.abs(self.field_values[wavelength_idx, :, :])
-        phases = np.angle(self.field_values[wavelength_idx, :, :])
+        amplitudes = np.abs(self.get(field_stage)[wavelength_idx, :, :])
+        phases = np.angle(self.get(field_stage)[wavelength_idx, :, :])
         phases[amplitudes == 0] = np.nan
 
         first_x_coordinate, first_y_coordinate = spatial_from_normalized_coordinates(self.normalized_x_coordinates[0],
