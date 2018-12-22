@@ -3,7 +3,8 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
+import math_utils
+import plot_utils
 
 
 def compute_scaled_fried_parameter(reference_value, reference_wavelength, reference_zenith_angle, wavelength, zenith_angle):
@@ -60,6 +61,7 @@ class TurbulencePhaseScreen:
     def setup_aperture_grid(self, optical_system):
 
         self.aperture_diameter = optical_system.get_aperture_diameter() # [m]
+        self.focal_length = optical_system.get_focal_length() # [m]
         self.n_aperture_grid_cells = optical_system.get_n_aperture_grid_cells()
         self.normalized_grid_cell_extent = optical_system.get_normalized_aperture_grid_cell_extent() # [wavelengths]
 
@@ -71,7 +73,7 @@ class TurbulencePhaseScreen:
 
     def setup_phase_screen_grid(self, aspect_number):
 
-        self.n_screen_grid_cells_y = 2**int(np.ceil(np.log2(self.n_aperture_grid_cells)))
+        self.n_screen_grid_cells_y = math_utils.nearest_higher_power_of_2(self.n_aperture_grid_cells)
         self.half_n_screen_grid_cells_y = self.n_screen_grid_cells_y//2
         self.normalized_screen_extent_y = self.n_screen_grid_cells_y*self.normalized_grid_cell_extent
 
@@ -243,21 +245,28 @@ class TurbulencePhaseScreen:
             autocorrelation += self.compute_low_frequency_autocorrelation()
         return 2*(autocorrelation[:, 0:1, 0:1] - autocorrelation)
 
-    def compute_analytical_structure_function(self, normalized_distances):
+    def compute_analytical_structure_function(self, distance, fried_parameter):
         '''
         Computes the analytical structure function for the Kolmogorov turbulence model.
         Warning: Currently assumes the outer scale to be infinite.
         '''
-        return 6.88*(np.multiply.outer(self.wavelengths, normalized_distances)\
-                     /self.get_fried_parameter(self.wavelengths, 0)[:, np.newaxis, np.newaxis])**(5/3)
+        return 6.88*(distance/fried_parameter)**(5/3)
 
     def compute_analytical_modulation_transfer_function(self):
         '''
         Computes the analytical modulation transfer function for the phase screens, which
         corresponds to the Fourier transform of the time-averaged point spread function.
+
+        Warning: This does not work yet.
         '''
-        structure_function = self.compute_analytical_structure_function(self.normalized_distances)
-        return np.exp(-structure_function) # Why does this give the correct result and not np.exp(-0.5*structure_function)?
+
+        distances = np.multiply.outer(self.wavelengths, self.normalized_distances)
+        fried_parameters = self.get_fried_parameter(self.wavelengths, self.zenith_angle)[:, np.newaxis, np.newaxis]
+        modulation_transfer_function = np.exp(-0.5*self.compute_analytical_structure_function(distances, fried_parameters))
+
+        plt.imshow(modulation_transfer_function[0, :, :])
+        plt.show()
+        return modulation_transfer_function
 
     def plot_structure_function_comparison(self, approximate_wavelength):
         '''
@@ -267,14 +276,15 @@ class TurbulencePhaseScreen:
         wavelength_idx = np.argmin(np.abs(self.wavelengths - approximate_wavelength))
         wavelength = self.wavelengths[wavelength_idx]
 
-        normalized_distances = np.arange(self.half_n_screen_grid_cells_x)*self.normalized_grid_cell_extent
+        distances = wavelength*np.arange(self.half_n_screen_grid_cells_x)*self.normalized_grid_cell_extent
+        fried_parameter = self.get_fried_parameter(wavelength, self.zenith_angle)
+        analytical_structure_function = self.compute_analytical_structure_function(distances, fried_parameter)
 
         structure_function = self.compute_structure_function()
-        analytical_structure_function = self.compute_analytical_structure_function(normalized_distances[np.newaxis, :])
 
         fig, ax = plt.subplots()
-        ax.plot(normalized_distances*wavelength, structure_function[wavelength_idx, 0, :self.half_n_screen_grid_cells_x], label='Measured')
-        ax.plot(normalized_distances*wavelength, analytical_structure_function[wavelength_idx, 0, :], label='Analytical')
+        ax.plot(distances, structure_function[wavelength_idx, 0, :self.half_n_screen_grid_cells_x], label='Measured')
+        ax.plot(distances, analytical_structure_function, label='Analytical')
         ax.set_xlabel(r'$r$ [m]')
         ax.set_ylabel(r'$D_\phi$')
         ax.set_title(r'Structure function ($\lambda = {:g}$ nm)'.format(wavelength*1e9))
@@ -439,39 +449,33 @@ class MovingTurbulencePhaseScreen(TurbulencePhaseScreen):
         ax.set_ylabel(r'$y$ [m]')
         ax.set_title('{}'.format(title))
 
-        im = ax.imshow(monochromatic_phase_screen,
-                       extent=spatial_extent,
-                       vmin=vmin, vmax=vmax,
-                       origin='lower',
-                       aspect='auto',
-                       animated=True,
-                       interpolation='none')
+        image = ax.imshow(monochromatic_phase_screen,
+                          extent=spatial_extent,
+                          origin='lower',
+                          #aspect='auto',
+                          vmin=vmin, vmax=vmax,
+                          interpolation='none',
+                          animated=True)
 
-        xleft, xright = ax.get_xlim()
-        ybottom, ytop = ax.get_ylim()
-        ax.set_aspect(abs((xright-xleft)/(ybottom-ytop)))
+        #plot_utils.set_axis_aspect(1
 
-        width = axes_size.AxesY(ax, aspect=0.05)
-        pad = axes_size.Fraction(0.4, width)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size=width, pad=pad)
-        fig.colorbar(im, cax=cax, label='Phase perturbation [rad]')
+        plot_utils.add_colorbar(fig, ax, image, label='Phase perturbation [rad]')
 
         time_text = ax.text(0.01, 0.99, '', color='white', ha='left', va='top', transform=ax.transAxes)
 
         plt.tight_layout(pad=1)
 
         def init():
-            return im, time_text
+            return image, time_text
 
         def update(time_idx):
-            print(time_idx)
+            print('Frame {:d}/{:d}'.format(time_idx, n_time_steps))
             time = times[time_idx]
             self.move_phase_screen(time_step)
-            im.set_array(self.get_monochromatic_phase_screen_covering_aperture(wavelength_idx))
+            image.set_array(self.get_monochromatic_phase_screen_covering_aperture(wavelength_idx))
             time_text.set_text('time: {:g} s'.format(time))
 
-            return im, time_text
+            return image, time_text
 
         anim = animation.FuncAnimation(fig, update, init_func=init, blit=True, frames=np.arange(n_time_steps))
 
