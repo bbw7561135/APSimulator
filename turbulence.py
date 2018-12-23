@@ -88,8 +88,8 @@ class TurbulencePhaseScreen:
         '''
         Computes quantities that will be used repeatedly for computing filter functions.
         '''
-        self.filter_function_scale = 2*np.pi*np.sqrt(0.00058)/(self.fried_parameter_wavelength*self.fried_parameter**(5/6)\
-                                                               *np.sqrt(self.normalized_screen_extent_x*self.normalized_screen_extent_y))
+        self.filter_function_scale = 2*np.pi*np.sqrt(0.00058)*self.fried_parameter_wavelength\
+                                        /(self.fried_parameter**(5/6)*np.sqrt(self.normalized_screen_extent_x*self.normalized_screen_extent_y))
         self.outer_scale_frequency_squared = 1/self.outer_scale**2
         self.inverse_wavelengths_squared = 1/self.wavelengths**2
 
@@ -128,7 +128,7 @@ class TurbulencePhaseScreen:
 
         distance_frequencies_squared = np.multiply.outer(self.inverse_wavelengths_squared, normalized_distance_frequencies_squared)
 
-        filter_functions = self.filter_function_scale/(distance_frequencies_squared + self.outer_scale_frequency_squared)**(11/12)
+        filter_functions = self.filter_function_scale*self.inverse_wavelengths_squared[:, np.newaxis, np.newaxis]/(distance_frequencies_squared + self.outer_scale_frequency_squared)**(11/12)
         filter_functions[:, self.half_n_screen_grid_cells_y, self.half_n_screen_grid_cells_x] = 0 # Average phase perturbation (corresponds to zero frequency) should be zero
 
         # Scale to account for overlap of subharmonic grid
@@ -160,8 +160,8 @@ class TurbulencePhaseScreen:
 
         distance_frequencies_squared = np.multiply.outer(self.inverse_wavelengths_squared, normalized_distance_frequencies_squared)
 
-        subharmonic_filter_functions = self.subharmonic_level_scales[np.newaxis, :, np.newaxis, np.newaxis]\
-                                       *self.filter_function_scale/(distance_frequencies_squared + self.outer_scale_frequency_squared)**(11/12)
+        subharmonic_filter_functions = self.filter_function_scale*self.subharmonic_level_scales[np.newaxis, :, np.newaxis, np.newaxis]\
+                                       *self.inverse_wavelengths_squared[:, np.newaxis, np.newaxis, np.newaxis]/(distance_frequencies_squared + self.outer_scale_frequency_squared)**(11/12)
         subharmonic_filter_functions[:, :, 2:4, 2:4] = 0 # Average phase perturbation (corresponds to zero frequency) should be zero
 
         return subharmonic_filter_functions # Shape: (n_wavelengths, n_subharmonic_levels, 6, 6)
@@ -260,9 +260,13 @@ class TurbulencePhaseScreen:
         Warning: This does not work yet.
         '''
 
+        #np.arange(-self.n_aperture_grid_cells//2, self.n_aperture_grid_cells//2)/(self.n_aperture_grid_cells*self.normalized_grid_cell_extent)
+
         distances = np.multiply.outer(self.wavelengths, self.normalized_distances)
         fried_parameters = self.get_fried_parameter(self.wavelengths, self.zenith_angle)[:, np.newaxis, np.newaxis]
-        modulation_transfer_function = np.exp(-0.5*self.compute_analytical_structure_function(distances, fried_parameters))
+        modulation_transfer_function = np.exp(-self.compute_analytical_structure_function(distances, fried_parameters))
+
+        modulation_transfer_function /= (np.sum(modulation_transfer_function, axis=(1,2))/(np.pi*(0.5*self.aperture_diameter)**2/(self.normalized_grid_cell_extent*self.wavelengths)**2))[:, np.newaxis, np.newaxis]
 
         plt.imshow(modulation_transfer_function[0, :, :])
         plt.show()
@@ -278,7 +282,7 @@ class TurbulencePhaseScreen:
 
         distances = wavelength*np.arange(self.half_n_screen_grid_cells_x)*self.normalized_grid_cell_extent
         fried_parameter = self.get_fried_parameter(wavelength, self.zenith_angle)
-        analytical_structure_function = self.compute_analytical_structure_function(distances, fried_parameter)
+        analytical_structure_function = self.compute_analytical_structure_function(self.focal_length*distances, fried_parameter)
 
         structure_function = self.compute_structure_function()
 
@@ -415,7 +419,7 @@ class MovingTurbulencePhaseScreen(TurbulencePhaseScreen):
             # Move aperture back one third of the canvas
             self.aperture_shift -= self.half_n_screen_grid_cells_x
 
-    def animate(self, time_step_scale, duration, approximate_wavelength, savename=False):
+    def animate(self, time_step_scale, duration, approximate_wavelength, output_path=False):
         '''
         Generates a movie showing the time evolution of the phase perturbations over the aperture.
         '''
@@ -479,9 +483,9 @@ class MovingTurbulencePhaseScreen(TurbulencePhaseScreen):
 
         anim = animation.FuncAnimation(fig, update, init_func=init, blit=True, frames=np.arange(n_time_steps))
 
-        if savename:
-            anim.save(savename, writer=animation.FFMpegWriter(fps=30,
-                                                              bitrate=3200,
-                                                              extra_args=['-vcodec', 'libx264']))
+        if output_path:
+            anim.save(output_path, writer=animation.FFMpegWriter(fps=30,
+                                                                 bitrate=3200,
+                                                                 extra_args=['-vcodec', 'libx264']))
         else:
             plt.show()
