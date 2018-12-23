@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
+from __future__ import division, print_function, absolute_import
 import numpy as np
+import scipy.signal
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import math_utils
@@ -72,13 +73,15 @@ class ImageLightField:
                 self.fields['filtered'][filter_name] *= flux_scale
 
         # Compute new spatial coordinates
-        self.x_coordinates, self.y_coordinates = spatial_from_angular_coordinates(self.angular_x_coordinates, self.angular_y_coordinates, new_focal_length)
+        self.x_coordinates, self.y_coordinates = spatial_from_angular_coordinates(self.angular_x_coordinates,
+                                                                                  self.angular_y_coordinates,
+                                                                                  new_focal_length)
 
         self.focal_length = new_focal_length
 
     def convolve(self, point_spread_function):
-        assert point_spread_function.shape == (self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x)
-        #self.fields['convolved'] = ???
+        assert point_spread_function.shape[0] == self.n_wavelengths
+        self.fields['convolved'] = math_utils.fftconvolve(self.fields['pure'], point_spread_function, mode='same', axes=(1, 2))
         self.fields['filtered'] = None # Reset the filtered versions of the field
 
     def filter(self, filter_set):
@@ -97,11 +100,26 @@ class ImageLightField:
     def get_wavelength(self, wavelength_idx):
         return self.wavelengths[wavelength_idx]
 
+    def find_index_of_closest_wavelength(self, approximate_wavelength):
+        return np.argmin(np.abs(self.wavelengths - approximate_wavelength))
+
     def get_spatial_coordinates(self):
         return self.x_coordinates, self.y_coordinates
 
     def get_angular_coordinates(self):
         return self.angular_x_coordinates, self.angular_y_coordinates
+
+    def compute_image_plane_area(self):
+        return (self.x_coordinates[-1] - self.x_coordinates[0])*(self.y_coordinates[-1] - self.y_coordinates[0])
+
+    def compute_total_flux(self, field_stage):
+        assert field_stage in self.fields
+        return np.sum(self.fields[field_stage])*self.compute_image_plane_area()
+
+    def compute_total_monochromatic_flux(self, field_stage, approximate_wavelength):
+        assert field_stage in self.fields
+        assert field_stage != 'filtered'
+        return np.sum(self.fields[field_stage][self.find_index_of_closest_wavelength(approximate_wavelength), :, :])*self.compute_image_plane_area()
 
     def set(self, spectral_fluxes):
         assert spectral_fluxes.dtype == self.spectral_fluxes.dtype
@@ -141,7 +159,7 @@ def visualize_image(image_light_field, field_stage, approximate_wavelength=None,
         wavelength_idx = 0
         wavelength = image_light_field.get_wavelength(wavelength_idx)
     else:
-        wavelength_idx = np.argmin(np.abs(image_light_field.get_wavelengths() - approximate_wavelength))
+        wavelength_idx = image_light_field.find_index_of_closest_wavelength(approximate_wavelength)
         wavelength = image_light_field.get_wavelength(wavelength_idx)
 
     if field_stage == 'filtered':
@@ -200,7 +218,7 @@ def animate_image(image_light_field, field_stage, times, update_function, approx
         wavelength_idx = 0
         wavelength = image_light_field.get_wavelength(wavelength_idx)
     else:
-        wavelength_idx = np.argmin(np.abs(image_light_field.get_wavelengths() - approximate_wavelength))
+        wavelength_idx = image_light_field.find_index_of_closest_wavelength(approximate_wavelength)
         wavelength = image_light_field.get_wavelength(wavelength_idx)
 
     if field_stage == 'filtered':
