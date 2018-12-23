@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from incident_light_field import IncidentLightField
-import image_light_field
+import incident_light_fields
+import image_light_fields
 import math_utils
 import plot_utils
 
@@ -78,9 +76,9 @@ class FraunhoferDiffractionOptics:
         self.flux_scales = (self.wavelengths*(self.normalized_grid_cell_extent**2/self.focal_length))**2
 
         # Create instance of incident light field class
-        self.incident_light_field = IncidentLightField(self.cropped_normalized_coordinates,
-                                                       self.cropped_normalized_coordinates,
-                                                       self.wavelengths)
+        self.incident_light_field = incident_light_fields.IncidentLightField(self.cropped_normalized_coordinates,
+                                                                             self.cropped_normalized_coordinates,
+                                                                             self.wavelengths)
 
     def setup_image_plane(self):
 
@@ -103,16 +101,10 @@ class FraunhoferDiffractionOptics:
         image_x_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
         image_y_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
 
-        self.image_light_field = image_light_field.ImageLightField(image_x_coordinates,
-                                                 image_y_coordinates,
-                                                 self.focal_length,
-                                                 self.wavelengths)
-
-        #self.image_x_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
-        #self.image_y_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
-
-        #self.image_angular_x_coordinates = self.full_image_angular_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
-        #self.image_angular_y_coordinates = self.full_image_angular_coordinates[self.image_idx_range_y[0]:self.image_idx_range_y[1]]
+        self.image_light_field = image_light_fields.ImageLightField(image_x_coordinates,
+                                                                    image_y_coordinates,
+                                                                    self.focal_length,
+                                                                    self.wavelengths)
 
     def get_incident_light_field(self):
         return self.incident_light_field
@@ -225,7 +217,7 @@ class FraunhoferDiffractionOptics:
 
 def load_fraunhofer_diffraction_optics(input_path):
 
-    incident_light_field = load_incident_light_field(input_path)
+    incident_light_field = incident_light_fields.load_incident_light_field(input_path)
 
     # Add extension if missing
     final_input_path = input_path + ('.npz' if len(input_path.split('.')) == 1 else '')
@@ -237,6 +229,7 @@ def load_fraunhofer_diffraction_optics(input_path):
                                                                 arrays['field_of_view_y'],
                                                                 arrays['max_angular_coarseness'],
                                                                 incident_light_field.get_wavelengths())
+
     fraunhofer_diffraction_optics.set_incident_field_values(incident_light_field.get('pure'))
 
     return fraunhofer_diffraction_optics
