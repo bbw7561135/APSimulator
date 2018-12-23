@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from incident_light_field import IncidentLightField
+import image_light_field
 import math_utils
 import plot_utils
 
@@ -38,18 +39,10 @@ class FraunhoferDiffractionOptics:
         self.n_wavelengths = len(wavelengths)
         self.max_field_of_view = max(field_of_view_x, field_of_view_y) # The resolution of the aperture grid is decided by the largest FOV
 
-        self.setup_aperture_grid()
-        self.setup_image_grid()
+        self.setup_aperture_plane()
+        self.setup_image_plane()
 
-        # Compute values for scaling squared Fourier coeefficients in order to get fluxes
-        self.flux_scales = (self.wavelengths*(self.normalized_grid_cell_extent**2/self.focal_length))**2
-
-        # Create instance of incident light field class
-        self.incident_light_field = IncidentLightField(self.cropped_normalized_coordinates,
-                                                       self.cropped_normalized_coordinates,
-                                                       self.wavelengths)
-
-    def setup_aperture_grid(self):
+    def setup_aperture_plane(self):
 
         # Compute the required extent of a cell in the aperture grid to achieve the desired field of view
         self.normalized_grid_cell_extent = 1/(2*np.tan(self.max_field_of_view/2))
@@ -81,7 +74,15 @@ class FraunhoferDiffractionOptics:
             self.cropped_normalized_y_coordinate_mesh = np.meshgrid(self.cropped_normalized_coordinates,
                                                                     self.cropped_normalized_coordinates, indexing='xy')
 
-    def setup_image_grid(self):
+        # Compute values for scaling squared Fourier coeefficients in order to get fluxes
+        self.flux_scales = (self.wavelengths*(self.normalized_grid_cell_extent**2/self.focal_length))**2
+
+        # Create instance of incident light field class
+        self.incident_light_field = IncidentLightField(self.cropped_normalized_coordinates,
+                                                       self.cropped_normalized_coordinates,
+                                                       self.wavelengths)
+
+    def setup_image_plane(self):
 
         # Compute the spatial extent of a cell in the image plane grid where the diffracted field lives
         self.image_grid_cell_extent = self.focal_length/(self.n_grid_cells*self.normalized_grid_cell_extent)
@@ -99,17 +100,31 @@ class FraunhoferDiffractionOptics:
         self.image_idx_range_x = np.searchsorted(self.full_image_angular_coordinates, (-self.field_of_view_x/2, self.field_of_view_x/2))
         self.image_idx_range_y = np.searchsorted(self.full_image_angular_coordinates, (-self.field_of_view_y/2, self.field_of_view_y/2))
 
-        self.image_x_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
-        self.image_y_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        image_x_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        image_y_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
 
-        self.image_angular_x_coordinates = self.full_image_angular_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
-        self.image_angular_y_coordinates = self.full_image_angular_coordinates[self.image_idx_range_y[0]:self.image_idx_range_y[1]]
+        self.image_light_field = image_light_field.ImageLightField(image_x_coordinates,
+                                                 image_y_coordinates,
+                                                 self.focal_length,
+                                                 self.wavelengths)
+
+        #self.image_x_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        #self.image_y_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+
+        #self.image_angular_x_coordinates = self.full_image_angular_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        #self.image_angular_y_coordinates = self.full_image_angular_coordinates[self.image_idx_range_y[0]:self.image_idx_range_y[1]]
 
     def get_incident_light_field(self):
         return self.incident_light_field
 
+    def get_image_light_field(self):
+        return self.image_light_field
+
     def set_incident_field_values(self, field_values):
         self.incident_light_field.set(field_values)
+
+    def set_image_spectral_fluxes(self, spectral_fluxes):
+        self.image_light_field.set(spectral_fluxes)
 
     def modulate_incident_light_field(self, modulation):
         self.incident_light_field.modulate(modulation)
@@ -161,7 +176,7 @@ class FraunhoferDiffractionOptics:
 
         self.incident_light_field.apply_transmission_mask(transmission_mask_function(x_coordinate_meshes, y_coordinate_meshes))
 
-    def compute_image_fluxes(self, field_stage='modulated'):
+    def update_image_light_field(self, incident_field_stage='modulated'):
         '''
         Performs the Fourier transformation of the incident field and subsequent scaling that produces
         the flux distribution focused in the image plane.
@@ -169,7 +184,7 @@ class FraunhoferDiffractionOptics:
 
         # Since the incident field only just covers the aperture diameter, it must be padded with zeros
         # at the edges to produce the desired angular resolution in the diffracted image
-        field_values = np.pad(self.incident_light_field.get(field_stage),
+        field_values = np.pad(self.incident_light_field.get(incident_field_stage),
                               ((0, 0),
                                (self.n_pad_grid_cells, self.n_pad_grid_cells),
                                (self.n_pad_grid_cells, self.n_pad_grid_cells)),
@@ -184,9 +199,9 @@ class FraunhoferDiffractionOptics:
                                                                self.image_idx_range_x[0]:self.image_idx_range_x[1]]
 
         # Square the Fourier coefficients and multiply with a wavelength-dependent scale that ensures energy conservation
-        image_fluxes = (trimmed_fourier_coefficients*np.conj(trimmed_fourier_coefficients)).real*self.flux_scales[:, np.newaxis, np.newaxis]
+        spectral_fluxes = (trimmed_fourier_coefficients*np.conj(trimmed_fourier_coefficients)).real*self.flux_scales[:, np.newaxis, np.newaxis]
 
-        return image_fluxes
+        self.set_image_spectral_fluxes(spectral_fluxes)
 
     def save(self, output_path, compressed=False):
 
@@ -206,226 +221,6 @@ class FraunhoferDiffractionOptics:
                      field_of_view_x=self.field_of_view_x,
                      field_of_view_y=self.field_of_view_y,
                      max_angular_coarseness=self.max_angular_coarseness)
-
-    def visualize_monochromatic_image(self, approximate_wavelength, field_stage='modulated', use_amplitude=False, verify_energy_conservation=False, output_path=None):
-        '''
-        Plots the given image plane flux distribution.
-        '''
-
-        # Find index of closest wavelength
-        wavelength_idx = np.argmin(np.abs(self.wavelengths - approximate_wavelength))
-        wavelength = self.wavelengths[wavelength_idx]
-
-        image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
-        monochromatic_image_fluxes = image_fluxes[wavelength_idx, :, :]
-
-        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
-                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
-
-        print('Rayleigh limit: {:g}\"'.format(math_utils.arcsec_from_radian(1.22*wavelength/self.aperture_diameter)))
-
-        if verify_energy_conservation:
-            monochromatic_incident_field = self.incident_light_field.get(field_stage)[wavelength_idx, :, :]
-            incident_spectral_power = np.sum((monochromatic_incident_field*np.conj(monochromatic_incident_field)).real)\
-                                      *(self.normalized_grid_cell_extent*wavelength)**2
-            diffracted_spectral_power = np.sum(monochromatic_image_fluxes)*(self.image_grid_cell_extent**2)
-            print('Incident spectral power: {:g} W/m\nDiffracted spectral power: {:g} W/m\nRelative energy loss: {:g} %'
-                  .format(incident_spectral_power, diffracted_spectral_power, 100*(1 - diffracted_spectral_power/incident_spectral_power)))
-
-        fig, ax = plt.subplots()
-
-        image = ax.imshow(np.sqrt(monochromatic_image_fluxes) if use_amplitude else monochromatic_image_fluxes,
-                          extent=math_utils.arcsec_from_radian(angular_extent),
-                          origin='lower',
-                          interpolation='none',
-                          cmap=plt.get_cmap('gray'))
-        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
-        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
-        ax.set_title(r'Image fluxes ($\lambda = {:.1f}$ nm)'.format(wavelength*1e9))
-
-        plot_utils.add_colorbar(fig, ax, image, label='Flux [W/m^2/m]')
-
-        plt.tight_layout()
-
-        if output_path is None:
-            plt.show()
-        else:
-            plt.savefig(output_path)
-
-    def visualize_color_image(self, filter_set, clipping_factor=1, field_stage='modulated', output_path=None):
-        '''
-        Plots the given image plane flux distribution.
-        '''
-
-        image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
-        filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, image_fluxes)
-        filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
-        vmin = np.min(filtered_flux_array)
-        vmax = np.max(filtered_flux_array)*clipping_factor
-        scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
-
-        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
-                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
-
-        fig, ax = plt.subplots()
-
-        image = ax.imshow(scaled_color_image,
-                          extent=math_utils.arcsec_from_radian(angular_extent),
-                          origin='lower',
-                          interpolation='none')
-        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
-        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
-        ax.set_title('Diffracted color image')
-
-        plt.tight_layout()
-
-        if output_path is None:
-            plt.show()
-        else:
-            plt.savefig(output_path)
-
-    def animate_monochromatic_image(self, phase_screen, time_step_scale, duration, approximate_wavelength, field_stage='modulated', accumulate=False, output_path=False):
-
-        time_step = time_step_scale*phase_screen.coherence_time
-        n_time_steps = int(np.ceil(duration/time_step)) + 1
-
-        # Find index of closest wavelength
-        wavelength_idx = np.argmin(np.abs(self.wavelengths - approximate_wavelength))
-        wavelength = self.wavelengths[wavelength_idx]
-
-        self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
-
-        monochromatic_image_fluxes = self.compute_image_fluxes(field_stage=field_stage)[wavelength_idx, :, :]
-
-        vmin = np.min(monochromatic_image_fluxes)
-        vmax = np.max(monochromatic_image_fluxes)
-
-        self.integrated_image_fluxes = np.zeros(monochromatic_image_fluxes.shape)
-
-        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
-                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
-
-        title = ''
-
-        figheight = 5
-        aspect = 1.3
-
-        fig = plt.figure(figsize=(aspect*figheight, figheight))
-        ax = fig.add_subplot(111)
-
-        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
-        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
-        ax.set_title('{}'.format(title))
-
-        image = ax.imshow(monochromatic_image_fluxes,
-                          extent=math_utils.arcsec_from_radian(angular_extent),
-                          origin='lower',
-                          #aspect='auto',
-                          vmin=vmin, vmax=vmax,
-                          interpolation='none',
-                          cmap=plt.get_cmap('gray'),
-                          animated=True)
-
-        #plot_utils.set_axis_aspect(1)
-
-        plot_utils.add_colorbar(fig, ax, image, label='Flux [W/m^2/m]')
-
-        time_text = ax.text(0.01, 0.99, '', color='white', ha='left', va='top', transform=ax.transAxes)
-
-        plt.tight_layout(pad=1)
-
-        def init():
-            return image, time_text
-
-        def update(time_idx):
-            print('Frame {:d}/{:d}'.format(time_idx, n_time_steps))
-            phase_screen.move_phase_screen(time_step)
-            self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
-            monochromatic_image_fluxes = self.compute_image_fluxes(field_stage=field_stage)[wavelength_idx, :, :]
-            self.integrated_image_fluxes += monochromatic_image_fluxes
-            image.set_array(self.integrated_image_fluxes/(time_idx+1) if accumulate else monochromatic_image_fluxes)
-            time_text.set_text('time: {:g} s'.format(phase_screen.time))
-
-            return image, time_text
-
-        anim = animation.FuncAnimation(fig, update, init_func=init, blit=True, frames=np.arange(n_time_steps))
-
-        if output_path:
-            anim.save(output_path, writer=animation.FFMpegWriter(fps=30,
-                                                                 bitrate=3200,
-                                                                 extra_args=['-vcodec', 'libx264']))
-        else:
-            plt.show()
-
-    def animate_color_image(self, filter_set, phase_screen, time_step_scale, duration, clipping_factor=1, field_stage='modulated', accumulate=False, output_path=False):
-
-        time_step = time_step_scale*phase_screen.coherence_time
-        n_time_steps = int(np.ceil(duration/time_step)) + 1
-
-        self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
-
-        image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
-        filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, image_fluxes)
-        filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
-        vmin = np.min(filtered_flux_array)
-        vmax = np.max(filtered_flux_array)*clipping_factor
-        scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
-
-        self.integrated_image_fluxes = np.zeros(scaled_color_image.shape)
-
-        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
-                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
-
-        title = ''
-
-        figheight = 5
-        aspect = 1.3
-
-        fig = plt.figure(figsize=(aspect*figheight, figheight))
-        ax = fig.add_subplot(111)
-
-        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
-        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
-        ax.set_title('{}'.format(title))
-
-        image = ax.imshow(scaled_color_image,
-                          extent=math_utils.arcsec_from_radian(angular_extent),
-                          origin='lower',
-                          #aspect='auto',
-                          interpolation='none',
-                          animated=True)
-
-        #plot_utils.set_axis_aspect(1)
-
-        time_text = ax.text(0.01, 0.99, '', color='white', ha='left', va='top', transform=ax.transAxes)
-
-        plt.tight_layout(pad=1)
-
-        def init():
-            return image, time_text
-
-        def update(time_idx):
-            print('Frame {:d}/{:d}'.format(time_idx, n_time_steps))
-            phase_screen.move_phase_screen(time_step)
-            self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
-            image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
-            filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, image_fluxes)
-            filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
-            scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
-            self.integrated_image_fluxes += scaled_color_image
-            image.set_array(self.integrated_image_fluxes/(time_idx+1) if accumulate else scaled_color_image)
-            time_text.set_text('time: {:g} s'.format(phase_screen.time))
-
-            return image, time_text
-
-        anim = animation.FuncAnimation(fig, update, init_func=init, blit=True, frames=np.arange(n_time_steps))
-
-        if output_path:
-            anim.save(output_path, writer=animation.FFMpegWriter(fps=30,
-                                                                 bitrate=3200,
-                                                                 extra_args=['-vcodec', 'libx264']))
-        else:
-            plt.show()
 
 
 def load_fraunhofer_diffraction_optics(input_path):
@@ -447,6 +242,32 @@ def load_fraunhofer_diffraction_optics(input_path):
     return fraunhofer_diffraction_optics
 
 
+def animate_seeing(optical_system, phase_screen, time_step_scale, duration, filter_set=None, incident_field_stage='modulated', image_field_stage='auto', **animation_kwargs):
+
+    if image_field_stage == 'auto':
+        if filter_set is not None:
+            image_field_stage = 'filtered'
+        else:
+            image_field_stage = 'convolved'
+    elif image_field_stage == 'filtered':
+        assert filter_set is not None
+
+    phase_screen.initialize(optical_system)
+
+    time_step = time_step_scale*phase_screen.get_coherence_time()
+    n_time_steps = int(np.ceil(duration/time_step)) + 1
+    times = np.arange(n_time_steps)*time_step
+
+    def update():
+        phase_screen.move_phase_screen(time_step)
+        optical_system.modulate_incident_light_field(phase_screen.compute_perturbation_field())
+        optical_system.update_image_light_field(incident_field_stage=incident_field_stage)
+        if image_field_stage == 'filtered':
+            optical_system.get_image_light_field().filter(filter_set)
+
+    image_light_field.animate_image(optical_system.get_image_light_field(), image_field_stage, times, update, **animation_kwargs)
+
+
 def test():
 
     from APSimulator import Constants, StarCluster
@@ -457,8 +278,8 @@ def test():
     FOV_x = math_utils.radian_from_arcsec(15)
     FOV_y = math_utils.radian_from_arcsec(15)
     aperture_diameter = 0.15
-    secondary_diameter = 0#0.2*aperture_diameter
-    spider_wane_width = 0#0.01*aperture_diameter
+    secondary_diameter = 0.2*aperture_diameter
+    spider_wane_width = 0.01*aperture_diameter
     focal_length = 0.75
     max_angular_coarseness = math_utils.radian_from_arcsec(0.1)
     fried_parameter_500 = 0.04
@@ -475,7 +296,6 @@ def test():
                                       np.abs(y) >= spider_wane_width))
 
     target = StarCluster(n_stars, 4, (3000, 30000), (1e-2, 2.0e4), 2e4)
-    #target.plot_angular_distribution(FOV_box_halfwidth=FOV_arcsec/2)
     target_info = target.get_target_info()
     polar_angles, azimuth_angles = target.get_spherical_direction_angles()
     incident_spectral_fluxes = np.swapaxes(target_info.get_incident_field_amplitudes()**2, 0, 1)
@@ -486,29 +306,12 @@ def test():
 
     #turbulence = TurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, n_subharmonic_levels, Constants.wavelengths)
     turbulence = MovingTurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, wind_speed, n_subharmonic_levels, Constants.wavelengths)
-    turbulence.initialize(optics)
+    #turbulence.initialize(optics)
 
     filter_set = FilterSet(red=Filter(595e-9, 680e-9), green=Filter(500e-9, 575e-9), blue=Filter(420e-9, 505e-9))
     #filter_set = FilterSet(blue=Filter(400e-9, 405e-9), green=Filter(550e-9, 555e-9), red=Filter(690e-9, 695e-9))
 
-    #optics.modulate_incident_light_field(turbulence.compute_analytical_modulation_transfer_function(optics))
-    turbulence.plot_monochromatic_point_spread_function(700e-9)
-    #turbulence.plot_color_point_spread_function(filter_set)
-    #optics.modulate_incident_light_field(turbulence.compute_perturbation_field())
-    #print(math_utils.arcsec_from_radian(0.98*view_wavelength/turbulence.get_fried_parameter(view_wavelength, zenith_angle)))
-
-    #optics.get_incident_light_field().visualize(view_wavelength)
-    #optics.visualize_monochromatic_image(view_wavelength, use_amplitude=0)
-    #optics.visualize_monochromatic_image(400e-9, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
-    #optics.visualize_monochromatic_image(550e-9, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
-    #optics.visualize_monochromatic_image(700e-9, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
-    #optics.visualize_color_image(filter_set, clipping_factor=1, field_stage='modulated')
-    #turbulence.plot_structure_function_comparison(view_wavelength)
-
-    #turbulence.animate(2, 0.2, view_wavelength, output_path='phase_screen.mp4')
-    #optics.animate_monochromatic_image(turbulence, 2, 1, view_wavelength, accumulate=True, output_path='image2.mp4')
-    #optics.animate_color_image(filter_set, turbulence, 2, 2.0, accumulate=False, clipping_factor=1, output_path='color_image.mp4')
-    #optics.animate_color_image(filter_set, turbulence, 3, 5.0, accumulate=True, clipping_factor=1, output_path='color_image_integrated.mp4')
+    animate_seeing(optics, turbulence, 2, 0.5, filter_set=filter_set, accumulate=0, output_path='movie.mp4')
 
 if __name__ == '__main__':
     test()

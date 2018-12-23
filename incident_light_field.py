@@ -75,7 +75,7 @@ class IncidentLightField:
                                                                                            normalized_y_coordinates, indexing='xy')
 
         # Create data cube for spectral and spatial distribution of complex incident field values [sqrt(W/m^2/m)]
-        self.field_values = np.zeros((self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_y), dtype='complex128')
+        self.field_values = np.zeros((self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x), dtype='complex128')
 
         # Store different versions of the field, so that modified versions of the field can be held together with unmodified one
         self.fields = {'pure': self.field_values, 'masked': self.field_values, 'modulated': self.field_values}
@@ -140,7 +140,7 @@ class IncidentLightField:
         assert transmission_mask.dtype == 'bool'
         assert transmission_mask.shape == (self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x)
         self.fields['masked'] = self.field_values*transmission_mask
-        self.fields['modulated'] = self.fields['masked']
+        self.fields['modulated'] = self.fields['masked'] # Reset the modulated version of the field
 
     def modulate(self, modulation):
         assert modulation.shape == (self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x)
@@ -157,8 +157,9 @@ class IncidentLightField:
         assert field_values.dtype == self.field_values.dtype
         assert field_values.shape == self.field_values.shape
         self.field_values = field_values # This does not copy the data, it only modifies the reference
-        self.fields['masked'] = self.field_values
-        self.fields['modulated'] = self.field_values
+        self.fields['pure'] = self.field_values # Update reference to the pure version of the field
+        self.fields['masked'] = self.field_values # Reset the masked version of the field
+        self.fields['modulated'] = self.field_values # Reset the modulated version of the field
 
     def clear(self):
         self.field_values[:, :, :] = 0 + 0j
@@ -181,7 +182,7 @@ class IncidentLightField:
 
     def visualize(self, approximate_wavelength, field_stage='modulated', output_path=None):
         '''
-        Plots the amplitudes and phases of the incident light field on the normalized grid.
+        Plots the amplitudes and phases of the incident light field on the spatial grid.
         '''
 
         # Find index of closest wavelength
@@ -246,5 +247,5 @@ def load_incident_light_field(input_path):
     incident_light_field = IncidentLightField(arrays['normalized_x_coordinates'],
                                               arrays['normalized_y_coordinates'],
                                               arrays['wavelengths'])
-    incident_light_field.set_field_values(arrays['field_values'])
+    incident_light_field.set(arrays['field_values'])
     return incident_light_field

@@ -61,7 +61,6 @@ class TurbulencePhaseScreen:
     def setup_aperture_grid(self, optical_system):
 
         self.aperture_diameter = optical_system.get_aperture_diameter() # [m]
-        self.focal_length = optical_system.get_focal_length() # [m]
         self.n_aperture_grid_cells = optical_system.get_n_aperture_grid_cells()
         self.n_pad_grid_cells = optical_system.get_n_pad_grid_cells()
         self.full_image_angular_coordinates = optical_system.get_full_image_angular_coordinates()
@@ -494,6 +493,9 @@ class MovingTurbulencePhaseScreen(TurbulencePhaseScreen):
 
             # Move aperture back one third of the canvas
             self.aperture_shift -= self.half_n_screen_grid_cells_x
+
+    def get_coherence_time(self):
+        return self.coherence_time
 
     def animate(self, time_step_scale, duration, approximate_wavelength, output_path=False):
         '''
