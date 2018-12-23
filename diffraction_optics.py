@@ -278,7 +278,7 @@ class FraunhoferDiffractionOptics:
         else:
             plt.savefig(output_path)
 
-    def animate_image(self, phase_screen, time_step_scale, duration, approximate_wavelength, accumulate=False, output_path=False):
+    def animate_monochromatic_image(self, phase_screen, time_step_scale, duration, approximate_wavelength, field_stage='modulated', accumulate=False, output_path=False):
 
         time_step = time_step_scale*phase_screen.coherence_time
         n_time_steps = int(np.ceil(duration/time_step)) + 1
@@ -289,7 +289,7 @@ class FraunhoferDiffractionOptics:
 
         self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
 
-        monochromatic_image_fluxes = self.compute_image_fluxes()[wavelength_idx, :, :]
+        monochromatic_image_fluxes = self.compute_image_fluxes(field_stage=field_stage)[wavelength_idx, :, :]
 
         vmin = np.min(monochromatic_image_fluxes)
         vmax = np.max(monochromatic_image_fluxes)
@@ -335,9 +335,79 @@ class FraunhoferDiffractionOptics:
             print('Frame {:d}/{:d}'.format(time_idx, n_time_steps))
             phase_screen.move_phase_screen(time_step)
             self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
-            monochromatic_image_fluxes = self.compute_image_fluxes()[wavelength_idx, :, :]
+            monochromatic_image_fluxes = self.compute_image_fluxes(field_stage=field_stage)[wavelength_idx, :, :]
             self.integrated_image_fluxes += monochromatic_image_fluxes
             image.set_array(self.integrated_image_fluxes/(time_idx+1) if accumulate else monochromatic_image_fluxes)
+            time_text.set_text('time: {:g} s'.format(phase_screen.time))
+
+            return image, time_text
+
+        anim = animation.FuncAnimation(fig, update, init_func=init, blit=True, frames=np.arange(n_time_steps))
+
+        if output_path:
+            anim.save(output_path, writer=animation.FFMpegWriter(fps=30,
+                                                                 bitrate=3200,
+                                                                 extra_args=['-vcodec', 'libx264']))
+        else:
+            plt.show()
+
+    def animate_color_image(self, filter_set, phase_screen, time_step_scale, duration, clipping_factor=1, field_stage='modulated', accumulate=False, output_path=False):
+
+        time_step = time_step_scale*phase_screen.coherence_time
+        n_time_steps = int(np.ceil(duration/time_step)) + 1
+
+        self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
+
+        image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
+        filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, image_fluxes)
+        filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
+        vmin = np.min(filtered_flux_array)
+        vmax = np.max(filtered_flux_array)*clipping_factor
+        scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
+
+        self.integrated_image_fluxes = np.zeros(scaled_color_image.shape)
+
+        angular_extent = np.array([self.image_angular_x_coordinates[0], self.image_angular_x_coordinates[-1],
+                                   self.image_angular_y_coordinates[0], self.image_angular_y_coordinates[-1]])
+
+        title = ''
+
+        figheight = 5
+        aspect = 1.3
+
+        fig = plt.figure(figsize=(aspect*figheight, figheight))
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel(r'$x$ [m]')
+        ax.set_ylabel(r'$y$ [m]')
+        ax.set_title('{}'.format(title))
+
+        image = ax.imshow(scaled_color_image,
+                          extent=math_utils.arcsec_from_radian(angular_extent),
+                          origin='lower',
+                          #aspect='auto',
+                          interpolation='none',
+                          animated=True)
+
+        #plot_utils.set_axis_aspect(1)
+
+        time_text = ax.text(0.01, 0.99, '', color='white', ha='left', va='top', transform=ax.transAxes)
+
+        plt.tight_layout(pad=1)
+
+        def init():
+            return image, time_text
+
+        def update(time_idx):
+            print('Frame {:d}/{:d}'.format(time_idx, n_time_steps))
+            phase_screen.move_phase_screen(time_step)
+            self.incident_light_field.modulate(phase_screen.compute_perturbation_field())
+            image_fluxes = self.compute_image_fluxes(field_stage=field_stage)
+            filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, image_fluxes)
+            filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
+            scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
+            self.integrated_image_fluxes += scaled_color_image
+            image.set_array(self.integrated_image_fluxes/(time_idx+1) if accumulate else scaled_color_image)
             time_text.set_text('time: {:g} s'.format(phase_screen.time))
 
             return image, time_text
@@ -385,11 +455,11 @@ def test():
     spider_wane_width = 0#0.01*aperture_diameter
     focal_length = 0.75
     max_angular_coarseness = math_utils.radian_from_arcsec(0.1)
-    fried_parameter_500 = 0.08
-    n_subharmonic_levels = 0
+    fried_parameter_500 = 0.04
+    n_subharmonic_levels = 5
     wind_speed = 10.0
     zenith_angle = 0.0
-    view_wavelength = 700e-9
+    view_wavelength = 400e-9
 
     def transmission_mask_function(x, y):
         r = np.sqrt(x**2 + y**2)
@@ -408,24 +478,28 @@ def test():
     optics.add_point_sources(polar_angles, azimuth_angles, incident_spectral_fluxes)
     optics.apply_transmission_mask(transmission_mask_function)
 
-    turbulence = TurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, n_subharmonic_levels, Constants.wavelengths)
-    #turbulence = MovingTurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, wind_speed, n_subharmonic_levels, Constants.wavelengths)
+    #turbulence = TurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, n_subharmonic_levels, Constants.wavelengths)
+    turbulence = MovingTurbulencePhaseScreen(fried_parameter_500, 500e-9, zenith_angle, wind_speed, n_subharmonic_levels, Constants.wavelengths)
     turbulence.initialize(optics)
 
-    #filter_set = FilterSet(red=Filter(595e-9, 680e-9), green=Filter(500e-9, 575e-9), blue=Filter(420e-9, 505e-9))
-    filter_set = FilterSet(red=Filter(400e-9, 405e-9), green=Filter(550e-9, 555e-9), blue=Filter(690e-9, 695e-9))
+    filter_set = FilterSet(red=Filter(595e-9, 680e-9), green=Filter(500e-9, 575e-9), blue=Filter(420e-9, 505e-9))
+    #filter_set = FilterSet(blue=Filter(400e-9, 405e-9), green=Filter(550e-9, 555e-9), red=Filter(690e-9, 695e-9))
 
-    optics.modulate_incident_light_field(turbulence.compute_analytical_modulation_transfer_function())
-    print(math_utils.arcsec_from_radian(0.98*view_wavelength/turbulence.get_fried_parameter(view_wavelength, zenith_angle)))
+    #optics.modulate_incident_light_field(turbulence.compute_analytical_modulation_transfer_function())
+    #optics.modulate_incident_light_field(turbulence.compute_perturbation_field())
+    #print(math_utils.arcsec_from_radian(0.98*view_wavelength/turbulence.get_fried_parameter(view_wavelength, zenith_angle)))
 
-    optics.get_incident_light_field().visualize(view_wavelength)
+    #optics.get_incident_light_field().visualize(view_wavelength)
     #optics.visualize_monochromatic_image(view_wavelength, use_amplitude=0)
-    optics.visualize_monochromatic_image(view_wavelength, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
+    #optics.visualize_monochromatic_image(400e-9, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
+    #optics.visualize_monochromatic_image(550e-9, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
+    #optics.visualize_monochromatic_image(700e-9, use_amplitude=0, field_stage='modulated', verify_energy_conservation=True)
     #optics.visualize_color_image(filter_set, clipping_factor=1, field_stage='modulated')
     #turbulence.plot_structure_function_comparison(view_wavelength)
 
-    #turbulence.animate(2, 0.2, view_wavelength, savename='phase_screen.mp4')
-    #optics.animate_image(turbulence, 2, 1, view_wavelength, accumulate=True, savename='image2.mp4')
+    #turbulence.animate(2, 0.2, view_wavelength, output_path='phase_screen.mp4')
+    #optics.animate_monochromatic_image(turbulence, 2, 1, view_wavelength, accumulate=True, output_path='image2.mp4')
+    optics.animate_color_image(filter_set, turbulence, 2, 1.0, accumulate=False, clipping_factor=0.8, output_path='color_image.mp4')
 
 if __name__ == '__main__':
     test()
