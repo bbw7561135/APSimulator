@@ -63,6 +63,8 @@ class TurbulencePhaseScreen:
         self.aperture_diameter = optical_system.get_aperture_diameter() # [m]
         self.focal_length = optical_system.get_focal_length() # [m]
         self.n_aperture_grid_cells = optical_system.get_n_aperture_grid_cells()
+        self.n_pad_grid_cells = optical_system.get_n_pad_grid_cells()
+        self.full_image_angular_coordinates = optical_system.get_full_image_angular_coordinates()
         self.normalized_grid_cell_extent = optical_system.get_normalized_aperture_grid_cell_extent() # [wavelengths]
 
         self.normalized_coordinates = np.arange(-self.n_aperture_grid_cells//2, self.n_aperture_grid_cells//2)*self.normalized_grid_cell_extent
@@ -256,21 +258,95 @@ class TurbulencePhaseScreen:
         '''
         Computes the analytical modulation transfer function for the phase screens, which
         corresponds to the Fourier transform of the time-averaged point spread function.
-
-        Warning: This does not work yet.
         '''
-
-        #np.arange(-self.n_aperture_grid_cells//2, self.n_aperture_grid_cells//2)/(self.n_aperture_grid_cells*self.normalized_grid_cell_extent)
-
         distances = np.multiply.outer(self.wavelengths, self.normalized_distances)
         fried_parameters = self.get_fried_parameter(self.wavelengths, self.zenith_angle)[:, np.newaxis, np.newaxis]
-        modulation_transfer_function = np.exp(-self.compute_analytical_structure_function(distances, fried_parameters))
+        modulation_transfer_function = np.exp(-0.5*self.compute_analytical_structure_function(distances, fried_parameters))
 
-        modulation_transfer_function /= (np.sum(modulation_transfer_function, axis=(1,2))/(np.pi*(0.5*self.aperture_diameter)**2/(self.normalized_grid_cell_extent*self.wavelengths)**2))[:, np.newaxis, np.newaxis]
-
-        plt.imshow(modulation_transfer_function[0, :, :])
-        plt.show()
         return modulation_transfer_function
+
+    def compute_approximate_time_averaged_FWHM(self, wavelength, zenith_angle):
+        return 0.98*wavelength/self.get_fried_parameter(wavelength, zenith_angle)
+
+    def compute_time_averaged_point_spread_function(self, extent=3):
+        '''
+        Computes the long-exposure point spread function due for the Kolmogorov turbulence
+        model.
+        '''
+        modulation_transfer_function = self.compute_analytical_modulation_transfer_function()
+
+        padded_MTF = np.pad(modulation_transfer_function,
+                            ((0, 0),
+                             (self.n_pad_grid_cells, self.n_pad_grid_cells),
+                             (self.n_pad_grid_cells, self.n_pad_grid_cells)),
+                            'constant')
+
+        fourier_coefficients = np.fft.fftshift(np.fft.fft2(padded_MTF, axes=(1, 2)), axes=(1, 2)).real
+
+        max_FWHM = self.compute_approximate_time_averaged_FWHM(np.min(self.wavelengths), self.zenith_angle)
+        start_idx = np.searchsorted(self.full_image_angular_coordinates, -extent*max_FWHM/2)
+        end_idx = len(self.full_image_angular_coordinates) - start_idx
+
+        point_spread_function = np.abs(fourier_coefficients[:, start_idx:end_idx, start_idx:end_idx])
+        point_spread_function /= np.sum(point_spread_function, axis=(1, 2))[:, np.newaxis, np.newaxis]
+
+        return point_spread_function
+
+    def plot_monochromatic_point_spread_function(self, approximate_wavelength, extent=3):
+
+        wavelength_idx = np.argmin(np.abs(self.wavelengths - approximate_wavelength))
+        wavelength = self.wavelengths[wavelength_idx]
+
+        point_spread_function = self.compute_time_averaged_point_spread_function(extent=extent)[wavelength_idx, :, :]
+
+        pad = (len(self.full_image_angular_coordinates) - point_spread_function.shape[-1])//2
+        angular_extent = np.array([self.full_image_angular_coordinates[pad], self.full_image_angular_coordinates[-pad-1],
+                                   self.full_image_angular_coordinates[pad], self.full_image_angular_coordinates[-pad-1]])
+
+        print(math_utils.arcsec_from_radian(self.compute_approximate_time_averaged_FWHM(wavelength, self.zenith_angle)))
+
+        fig, ax = plt.subplots()
+
+        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
+        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
+        ax.set_title(r'Time averaged atmospheric point spread function ($\lambda = {:g}$ nm)'.format(wavelength*1e9))
+
+        image = ax.imshow(point_spread_function,
+                          extent=math_utils.arcsec_from_radian(angular_extent),
+                          origin='lower',
+                          interpolation='none',
+                          cmap=plt.get_cmap('gray'))
+
+        plot_utils.add_colorbar(fig, ax, image, label='Weight')
+
+        plt.show()
+
+    def plot_color_point_spread_function(self, filter_set, clipping_factor=1, extent=3):
+
+        point_spread_function = self.compute_time_averaged_point_spread_function(extent=extent)
+
+        filtered_fluxes = filter_set.compute_filtered_fluxes(self.wavelengths, point_spread_function)
+        filtered_flux_array = filter_set.construct_filtered_flux_array(filtered_fluxes, ['red', 'green', 'blue'], [0, 1, 2], color_axis=2)
+        vmin = np.min(filtered_flux_array)
+        vmax = np.max(filtered_flux_array)*clipping_factor
+        scaled_color_image = (filtered_flux_array - vmin)/(vmax - vmin)
+
+        pad = (len(self.full_image_angular_coordinates) - point_spread_function.shape[-1])//2
+        angular_extent = np.array([self.full_image_angular_coordinates[pad], self.full_image_angular_coordinates[-pad-1],
+                                   self.full_image_angular_coordinates[pad], self.full_image_angular_coordinates[-pad-1]])
+
+        fig, ax = plt.subplots()
+
+        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
+        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
+        ax.set_title('Time averaged atmospheric point spread function')
+
+        ax.imshow(scaled_color_image,
+                  extent=math_utils.arcsec_from_radian(angular_extent),
+                  origin='lower',
+                  interpolation='none')
+
+        plt.show()
 
     def plot_structure_function_comparison(self, approximate_wavelength):
         '''
@@ -282,7 +358,7 @@ class TurbulencePhaseScreen:
 
         distances = wavelength*np.arange(self.half_n_screen_grid_cells_x)*self.normalized_grid_cell_extent
         fried_parameter = self.get_fried_parameter(wavelength, self.zenith_angle)
-        analytical_structure_function = self.compute_analytical_structure_function(self.focal_length*distances, fried_parameter)
+        analytical_structure_function = self.compute_analytical_structure_function(distances, fried_parameter)
 
         structure_function = self.compute_structure_function()
 

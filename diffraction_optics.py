@@ -90,20 +90,20 @@ class FraunhoferDiffractionOptics:
         full_image_coordinates = np.arange(-self.n_grid_cells//2, self.n_grid_cells//2)*self.image_grid_cell_extent
 
         # Compute corresponding angles with respect to the optical axis
-        full_image_angular_coordinates = np.arctan2(full_image_coordinates, self.focal_length)
+        self.full_image_angular_coordinates = np.arctan2(full_image_coordinates, self.focal_length)
 
         # Compute index ranges for the part of the image spanning the field of view.
         # Outside these ranges, sources will have been filtered out from the incident field.
         # They must still be included in the Fourier transform since we want to have square
         # cells in both the aperture and image grids.
-        self.image_idx_range_x = np.searchsorted(full_image_angular_coordinates, (-self.field_of_view_x/2, self.field_of_view_x/2))
-        self.image_idx_range_y = np.searchsorted(full_image_angular_coordinates, (-self.field_of_view_y/2, self.field_of_view_y/2))
+        self.image_idx_range_x = np.searchsorted(self.full_image_angular_coordinates, (-self.field_of_view_x/2, self.field_of_view_x/2))
+        self.image_idx_range_y = np.searchsorted(self.full_image_angular_coordinates, (-self.field_of_view_y/2, self.field_of_view_y/2))
 
         self.image_x_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
         self.image_y_coordinates = full_image_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
 
-        self.image_angular_x_coordinates = full_image_angular_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
-        self.image_angular_y_coordinates = full_image_angular_coordinates[self.image_idx_range_y[0]:self.image_idx_range_y[1]]
+        self.image_angular_x_coordinates = self.full_image_angular_coordinates[self.image_idx_range_x[0]:self.image_idx_range_x[1]]
+        self.image_angular_y_coordinates = self.full_image_angular_coordinates[self.image_idx_range_y[0]:self.image_idx_range_y[1]]
 
     def get_incident_light_field(self):
         return self.incident_light_field
@@ -123,8 +123,14 @@ class FraunhoferDiffractionOptics:
     def get_n_aperture_grid_cells(self):
         return self.n_grid_cells_across_aperture
 
+    def get_n_pad_grid_cells(self):
+        return self.n_pad_grid_cells
+
     def get_normalized_aperture_grid_cell_extent(self):
         return self.normalized_grid_cell_extent
+
+    def get_full_image_angular_coordinates(self):
+        return self.full_image_angular_coordinates
 
     def add_point_sources(self, polar_angles, azimuth_angles, incident_spectral_fluxes):
         self.incident_light_field.add_point_sources(polar_angles, azimuth_angles,
@@ -307,8 +313,8 @@ class FraunhoferDiffractionOptics:
         fig = plt.figure(figsize=(aspect*figheight, figheight))
         ax = fig.add_subplot(111)
 
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$y$ [m]')
+        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
+        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
         ax.set_title('{}'.format(title))
 
         image = ax.imshow(monochromatic_image_fluxes,
@@ -378,8 +384,8 @@ class FraunhoferDiffractionOptics:
         fig = plt.figure(figsize=(aspect*figheight, figheight))
         ax = fig.add_subplot(111)
 
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$y$ [m]')
+        ax.set_xlabel(r'$\alpha_x$ [arcsec]')
+        ax.set_ylabel(r'$\alpha_y$ [arcsec]')
         ax.set_title('{}'.format(title))
 
         image = ax.imshow(scaled_color_image,
@@ -485,7 +491,9 @@ def test():
     filter_set = FilterSet(red=Filter(595e-9, 680e-9), green=Filter(500e-9, 575e-9), blue=Filter(420e-9, 505e-9))
     #filter_set = FilterSet(blue=Filter(400e-9, 405e-9), green=Filter(550e-9, 555e-9), red=Filter(690e-9, 695e-9))
 
-    #optics.modulate_incident_light_field(turbulence.compute_analytical_modulation_transfer_function())
+    #optics.modulate_incident_light_field(turbulence.compute_analytical_modulation_transfer_function(optics))
+    turbulence.plot_monochromatic_point_spread_function(700e-9)
+    #turbulence.plot_color_point_spread_function(filter_set)
     #optics.modulate_incident_light_field(turbulence.compute_perturbation_field())
     #print(math_utils.arcsec_from_radian(0.98*view_wavelength/turbulence.get_fried_parameter(view_wavelength, zenith_angle)))
 
@@ -499,7 +507,8 @@ def test():
 
     #turbulence.animate(2, 0.2, view_wavelength, output_path='phase_screen.mp4')
     #optics.animate_monochromatic_image(turbulence, 2, 1, view_wavelength, accumulate=True, output_path='image2.mp4')
-    optics.animate_color_image(filter_set, turbulence, 2, 1.0, accumulate=False, clipping_factor=0.8, output_path='color_image.mp4')
+    #optics.animate_color_image(filter_set, turbulence, 2, 2.0, accumulate=False, clipping_factor=1, output_path='color_image.mp4')
+    #optics.animate_color_image(filter_set, turbulence, 3, 5.0, accumulate=True, clipping_factor=1, output_path='color_image_integrated.mp4')
 
 if __name__ == '__main__':
     test()
