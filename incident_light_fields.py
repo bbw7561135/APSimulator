@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors
 import math_utils
 import plot_utils
+import plane_wave_summation
+import time
 
 
 def spatial_from_normalized_coordinates(normalized_x_coordinate, normalized_y_coordinate, wavelength):
@@ -23,10 +25,9 @@ def normalized_from_spatial_coordinates(x_coordinate, y_coordinate, wavelength):
     return x_coordinate*inverse_wavelength, y_coordinate*inverse_wavelength
 
 
-#@jit(nopython=True, parallel=True)
 def add_plane_waves(field_values,
                     wave_amplitudes,
-                    normalized_x_coordinate_mesh, normalized_y_coordinate_mesh,
+                    normalized_x_coordinates, normalized_y_coordinates,
                     direction_vectors_x, direction_vectors_y):
     '''
     Takes a set of plane waves coming from point sources in various directions, and computes the
@@ -34,16 +35,58 @@ def add_plane_waves(field_values,
     assumed to have no initial phase difference, and the (extremely fast) temporal component due
     to the oscillation of the electromagnetic field is neglected.
 
-    Arguments: Array of light field values to update     (complex[n_wavelengths, n_y_coordinates, n_x_coordinates])
-               Amplitudes of the plane waves             (float[n_wavelengths, n_sources])
-               Meshes of normalized x- and y-coordinates (float[n_y_coordinates, n_x_coordinates])
-               x- and y-components of direction vectors  (float[n_sources])
+    This is a wrapper around an optimized C function that performs the actual summation.
+
+    Arguments: Array of light field values to update    (complex[n_wavelengths, n_y_coordinates, n_x_coordinates])
+               Amplitudes of the plane waves            (float[n_sources, n_wavelengths])
+               Array of normalized x-coordinates        (float[n_x_coordinates])
+               Array of normalized y-coordinates        (float[n_y_coordinates])
+               x- and y-components of direction vectors (float[n_sources])
     '''
+
+    # Construct array of zeros for field values to be summed into by the C function.
+    # Note that the wavelength axis here has to be the outer axis (for performance reasons).
+    axis_shifted_field_values = np.zeros((field_values.shape[1], field_values.shape[2], field_values.shape[0]), dtype=field_values.dtype)
+
+    # Call C function to fill the array with summed field values
+    plane_wave_summation.sum_plane_waves(axis_shifted_field_values,
+                                         wave_amplitudes,
+                                         (2*np.pi)*normalized_x_coordinates,
+                                         (2*np.pi)*normalized_y_coordinates,
+                                         direction_vectors_x, direction_vectors_y)
+
+    # Add the computed field values to the existing array, making sure to first move the wavelength axis back
+    field_values[:, :, :] += np.moveaxis(axis_shifted_field_values, 2, 0)
+
+
+def add_plane_waves_vectorized(field_values,
+                               wave_amplitudes,
+                               normalized_x_coordinates, normalized_y_coordinates,
+                               direction_vectors_x, direction_vectors_y):
+    '''
+    Takes a set of plane waves coming from point sources in various directions, and computes the
+    combined light field incident on a wavelength-normalized spatial grid. The plane waves are
+    assumed to have no initial phase difference, and the (extremely fast) temporal component due
+    to the oscillation of the electromagnetic field is neglected.
+
+    This version is fast but very memory intensive for large arrays.
+
+    Arguments: Array of light field values to update    (complex[n_wavelengths, n_y_coordinates, n_x_coordinates])
+               Amplitudes of the plane waves            (float[n_sources, n_wavelengths])
+               Array of normalized x-coordinates        (float[n_x_coordinates])
+               Array of normalized y-coordinates        (float[n_y_coordinates])
+               x- and y-components of direction vectors (float[n_sources])
+    '''
+
+    # Note that 'xy'-indexing means that x corresponds to the outer dimension of the array
+    normalized_x_coordinate_mesh, normalized_y_coordinate_mesh = np.meshgrid(normalized_x_coordinates,
+                                                                             normalized_y_coordinates, indexing='xy')
+
     phase_shifts_x = np.multiply.outer(normalized_x_coordinate_mesh, direction_vectors_x) # (n_y_coordinates, n_x_coordinates, n_sources)
     phase_shifts_y = np.multiply.outer(normalized_y_coordinate_mesh, direction_vectors_y)
     total_phase_shifts = 2*np.pi*(phase_shifts_x + phase_shifts_y)
     modulation = np.cos(total_phase_shifts) - 1j*np.sin(total_phase_shifts)
-    field_values[:, :, :] += np.tensordot(wave_amplitudes, modulation, axes=(1, 2))
+    field_values[:, :, :] += np.tensordot(wave_amplitudes, modulation, axes=(0, 2))
 
 
 class IncidentLightField:
@@ -70,10 +113,6 @@ class IncidentLightField:
         self.n_grid_cells_x = len(normalized_x_coordinates)
         self.n_grid_cells_y = len(normalized_y_coordinates)
 
-        # Note that 'xy'-indexing means that x corresponds to the outer dimension of the array
-        self.normalized_x_coordinate_mesh, self.normalized_y_coordinate_mesh = np.meshgrid(normalized_x_coordinates,
-                                                                                           normalized_y_coordinates, indexing='xy')
-
         # Create data cube for spectral and spatial distribution of complex incident field values [sqrt(W/m^2/m)]
         self.field_values = np.zeros((self.n_wavelengths, self.n_grid_cells_y, self.n_grid_cells_x), dtype='complex128')
 
@@ -84,11 +123,11 @@ class IncidentLightField:
         '''
         Arguments: Polar angles of sources [rad]                               (float[n_sources])
                    Azimuth angles of sources [rad]                             (float[n_sources])
-                   Incident spectral fluxes from sources [W/m^2/m]             (float[n_wavelengths, n_sources])
+                   Incident spectral fluxes from sources [W/m^2/m]             (float[n_sources, n_wavelengths])
                    Angular x- and y-extents covering the visible sources [rad] (float)
         '''
         n_sources = len(polar_angles)
-        assert incident_spectral_fluxes.shape == (self.n_wavelengths, n_sources)
+        assert incident_spectral_fluxes.shape == (n_sources, self.n_wavelengths)
 
         # Create mask to select sources inside the field of view
         angular_x_coordinates, angular_y_coordinates = math_utils.angular_coordinates_from_spherical_angles(polar_angles, azimuth_angles)
@@ -100,12 +139,15 @@ class IncidentLightField:
         direction_vectors_x, direction_vectors_y = math_utils.direction_vector_from_spherical_angles(polar_angles[is_inside_FOV],
                                                                                                      azimuth_angles[is_inside_FOV])
 
-        wave_amplitudes = np.sqrt(incident_spectral_fluxes[:, is_inside_FOV]) # [sqrt(W/m^2/m)]
+        wave_amplitudes = np.sqrt(incident_spectral_fluxes[is_inside_FOV, :]) # [sqrt(W/m^2/m)]
 
+        start = time.time()
         add_plane_waves(self.field_values,
                         wave_amplitudes,
-                        self.normalized_x_coordinate_mesh, self.normalized_y_coordinate_mesh,
+                        self.normalized_x_coordinates, self.normalized_y_coordinates,
                         direction_vectors_x, direction_vectors_y)
+        end = time.time()
+        print('Elapsed time: {:g} s'.format(end - start))
 
     def add_extended_source(self, angular_x_coordinates, angular_y_coordinates, incident_spectral_fluxes, field_of_view_x, field_of_view_y):
         '''
