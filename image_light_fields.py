@@ -129,6 +129,13 @@ class ImageLightField:
         self.fields['convolved'] = self.spectral_fluxes # Reset the convolved version of the field
         self.fields['filtered'] = None # Reset the filtered versions of the field
 
+    def set_stage(self, field_stage, spectral_fluxes):
+        assert field_stage in self.fields
+        if field_stage != 'filtered':
+            assert spectral_fluxes.dtype == self.spectral_fluxes.dtype
+            assert spectral_fluxes.shape == self.spectral_fluxes.shape
+        self.fields[field_stage] = spectral_fluxes
+
     def clear(self):
         self.spectral_fluxes[:, :, :] = 0 + 0j
         self.fields['convolved'] = self.spectral_fluxes
@@ -141,14 +148,31 @@ class ImageLightField:
                                 y_coordinates=self.y_coordinates,
                                 focal_length=self.focal_length,
                                 wavelengths=self.wavelengths,
-                                spectral_fluxes=self.spectral_fluxes)
+                                spectral_fluxes=self.spectral_fluxes,
+                                convolved=self.fields['convolved'])
         else:
             np.savez(output_path,
                      x_coordinates=self.x_coordinates,
                      y_coordinates=self.y_coordinates,
                      focal_length=self.focal_length,
                      wavelengths=self.wavelengths,
-                     spectral_fluxes=self.spectral_fluxes)
+                     spectral_fluxes=self.spectral_fluxes,
+                     convolved=self.fields['convolved'])
+
+
+def load_image_light_field(input_path):
+
+    # Add extension if missing
+    final_input_path = input_path + ('.npz' if len(input_path.split('.')) == 1 else '')
+
+    arrays = np.load(final_input_path)
+    image_light_field = ImageLightField(arrays['x_coordinates'],
+                                        arrays['y_coordinates'],
+                                        arrays['focal_length'],
+                                        arrays['wavelengths'],
+                                        spectral_fluxes=arrays['spectral_fluxes'])
+    image_light_field.set_stage('convolved', arrays['convolved'])
+    return image_light_field
 
 
 def visualize_image(image_light_field, field_stage, approximate_wavelength=None, use_spatial_extent=False, clipping_factor=1, output_path=None):
@@ -299,17 +323,3 @@ def animate_image(image_light_field, field_stage, times, update_function, approx
         plt.show()
 
     image_light_field.integrated_image_values = None
-
-
-def load_image_light_field(input_path):
-
-    # Add extension if missing
-    final_input_path = input_path + ('.npz' if len(input_path.split('.')) == 1 else '')
-
-    arrays = np.load(final_input_path)
-    image_light_field = IncidentLightField(arrays['x_coordinates'],
-                                           arrays['y_coordinates'],
-                                           arrays['focal_length'],
-                                           arrays['wavelengths'],
-                                           spectral_fluxes=arrays['spectral_fluxes'])
-    return image_light_field
