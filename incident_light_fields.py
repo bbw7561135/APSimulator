@@ -153,12 +153,12 @@ class IncidentLightField:
         '''
         Arguments: Angular x-coordinates for the source grid [rad]                     (float[n_x_angles])
                    Angular y-coordinates for the source grid [rad]                     (float[n_y_angles])
-                   Incident spectral fluxes from source grid cells [W/m^2/m]           (float[n_wavelengths, n_y_angles, n_x_angles])
+                   Incident spectral fluxes from source grid cells [W/m^2/m]           (float[n_y_angles, n_x_angles, n_wavelengths])
                    Angular x- and y-extents covering visible parts of the source [rad] (float)
         '''
         n_x_angles = len(angular_x_coordinates)
         n_y_angles = len(angular_y_coordinates)
-        assert incident_spectral_fluxes.shape == (self.n_wavelengths, n_y_angles, n_x_angles)
+        assert incident_spectral_fluxes.shape == (n_y_angles, n_x_angles, self.n_wavelengths)
 
         # Find index ranges to select parts of source inside the field of view
         idx_range_x = np.searchsorted(angular_x_coordinates, (-field_of_view_x/2, field_of_view_x/2)) # Note: this is lower inclusive and upper exclusive
@@ -166,17 +166,17 @@ class IncidentLightField:
 
         # Compute x- and y-components of the wave vectors of the plane waves
         direction_vectors_x, \
-            direction_vectors_y = math_utils.direction_vector_from_angular_coordinates(angular_x_coordinate_mesh[idx_range_y[0]:idx_range_y[1],
-                                                                                                                 idx_range_x[0]:idx_range_x[1]],
-                                                                                       angular_y_coordinate_mesh[idx_range_y[0]:idx_range_y[1],
-                                                                                                                 idx_range_x[0]:idx_range_x[1]])
+            direction_vectors_y = math_utils.direction_vector_from_angular_coordinates(angular_x_coordinates[idx_range_x[0]:idx_range_x[1]],
+                                                                                       angular_y_coordinates[idx_range_y[0]:idx_range_y[1]])
 
-        wave_amplitudes = np.sqrt(incident_spectral_fluxes[:, idx_range_y[0]:idx_range_y[1], idx_range_x[0]:idx_range_x[1]]) # [sqrt(W/m^2/m)]
+        direction_vectors_x_mesh, direction_vectors_y_mesh = np.meshgrid(direction_vectors_x, direction_vectors_y, indexing='xy')
+
+        wave_amplitudes = np.sqrt(incident_spectral_fluxes[idx_range_y[0]:idx_range_y[1], idx_range_x[0]:idx_range_x[1], :]) # [sqrt(W/m^2/m)]
 
         add_plane_waves(self.field_values,
-                        wave_amplitudes.reshape(self.n_wavelengths, -1),
-                        self.normalized_x_coordinate_mesh, self.normalized_y_coordinate_mesh,
-                        np.ravel(direction_vectors_x), np.ravel(direction_vectors_y))
+                        wave_amplitudes.reshape(n_y_angles*n_x_angles, self.n_wavelengths),
+                        self.normalized_x_coordinates, self.normalized_y_coordinates,
+                        np.ravel(direction_vectors_x_mesh), np.ravel(direction_vectors_y_mesh))
 
     def apply_transmission_mask(self, transmission_mask):
         assert transmission_mask.dtype == 'bool'
