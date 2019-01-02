@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
+# This file is part of the APSimulator API.
+# Author: Lars Frogner
 import numpy as np
-import field_combination
+import scipy.signal
+import field_processing
+import grids
+import fields
 import math_utils
 
 
@@ -18,8 +23,11 @@ def compute_wavelength_scaled_fried_parameter(reference_value, reference_wavelen
     return reference_value*(wavelength/reference_wavelength)**(6/5)
 
 
-class KolmogorovTurbulence(field_combination.FieldGenerator):
-
+class KolmogorovTurbulence:
+    '''
+    Represents the Kolmogorov model of atmospheric seeing, where light passing through the
+    atmosphere is phase shifted due to differences in refractive indices caused by turbulence.
+    '''
     def __init__(self, reference_fried_parameter, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0):
 
         # The Fried parameter is the aperture diameter for which the RMS phase perturbation would be equal to 1 radian [m].
@@ -29,15 +37,13 @@ class KolmogorovTurbulence(field_combination.FieldGenerator):
         self.reference_zenith_angle = float(reference_zenith_angle)
         self.zenith_angle = float(zenith_angle) # Angle of view direction with respect to the zenith (straight up) [rad]
 
-        self.fried_parameter_at_zenith_angle = compute_zenith_angle_scaled_fried_parameter(self.reference_fried_parameter, self.reference_zenith_angle, self.zenith_angle)
+        self.fried_parameter_at_zenith_angle = compute_zenith_angle_scaled_fried_parameter(self.reference_fried_parameter,
+                                                                                           self.reference_zenith_angle, self.zenith_angle)
 
     def compute_fried_parameter(self, wavelength):
         return compute_wavelength_scaled_fried_parameter(self.fried_parameter_at_zenith_angle, self.reference_wavelength, wavelength)
 
     def compute_analytical_structure_function(self, distance, wavelength):
-        '''
-        Computes the analytical structure function for the Kolmogorov turbulence model.
-        '''
         return 6.88*(distance/self.compute_fried_parameter(wavelength))**(5/3)
 
     def compute_analytical_modulation_transfer_function(self, distance, wavelength):
@@ -48,74 +54,92 @@ class KolmogorovTurbulence(field_combination.FieldGenerator):
         return np.exp(-0.5*self.compute_analytical_structure_function(distance, wavelength))
 
     def compute_approximate_time_averaged_FWHM(self, wavelength):
-        return 0.98*wavelength/self.compute_fried_parameter(wavelength)
+        return 0.976*wavelength/self.compute_fried_parameter(wavelength)
+
+    def compute_moffat_PSF_fit(self, wavelengths, angular_distances, beta=4):
+
+        HW = self.compute_approximate_time_averaged_FWHM(wavelengths)/2
+        one_over_HW_squared = 1/HW**2
+        theta_over_HW_squared = np.multiply.outer(one_over_HW_squared, angular_distances**2)
+
+        constant_1 = 2**(1/beta) - 1
+        constant_2 = (beta - 1)*constant_1**(1 - beta)/np.pi
+
+        return constant_2*one_over_HW_squared[:, np.newaxis, np.newaxis]/(1/constant_1 + theta_over_HW_squared)**beta
+
+    def compute_dual_moffat_PSF_fit(self, wavelengths, angular_distances, beta_1=7, beta_2=2):
+
+        HW = self.compute_approximate_time_averaged_FWHM(wavelengths)/2
+        one_over_HW_squared = 1/HW**2
+        theta_over_HW_squared = np.multiply.outer(one_over_HW_squared, angular_distances**2)
+
+        constant_1 = 2**(1/beta_1) - 1
+        constant_2 = (beta_1 - 1)*constant_1**(1 - beta_1)/(2*np.pi)
+        constant_3 = 2**(1/beta_2) - 1
+        constant_4 = (beta_2 - 1)*constant_3**(1 - beta_2)/(2*np.pi)
+
+        return one_over_HW_squared[:, np.newaxis, np.newaxis]*\
+               (constant_2/(1/constant_1 + theta_over_HW_squared)**beta_1 +
+                constant_4/(1/constant_3 + theta_over_HW_squared)**beta_2)
 
 
-class AveragedKolmogorovTurbulence(KolmogorovTurbulence):
-
+class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldProcessor):
+    '''
+    Class for convolving the image field with the long-exposure point spread function for
+    the Kolmogorov turbulence model.
+    '''
     def __init__(self, *turbulence_args, **turbulence_kwargs):
         super().__init__(*turbulence_args, **turbulence_kwargs)
 
-    def compute_amplitude_modulation_field(self, use_memmap=False):
+    def compute_point_spread_function(self):
+
+        # Compute mesh of angular distances
+        angular_distances = math_utils.polar_angle_from_direction_vector(*self.grid.get_coordinate_meshes())
+
+        # Approximate the long-exposure Kolmogorov PSF as the sum of two Moffat functions
+        point_spread_function = self.compute_dual_moffat_PSF_fit(self.wavelengths, angular_distances)
+
+        # Normalize to ensure energy conservation
+        point_spread_function /= np.sum(point_spread_function, axis=(1,2))[:, np.newaxis, np.newaxis]
+
+        return point_spread_function
+
+    def process(self, field):
         '''
-        Computes the long-exposure point spread function due for the Kolmogorov turbulence
-        model.
+        Implements the FieldProcessor method for convolving the given field with the
+        time-averaged turbulence point spread function.
         '''
-        normalized_distances = self.grid.compute_distances_within_window()
-        distances = np.multiply.outer(self.wavelengths, normalized_distances)
-
-        modulation_transfer_function = self.compute_analytical_modulation_transfer_function(distances, self.wavelengths[:, np.newaxis, np.newaxis])
-
-        intensity_MTF_field = fields.SpectralField(self.grid, self.wavelengths,
-                                                   initial_value=0,
-                                                   dtype='float64',
-                                                   use_memmap=use_memmap)
-
-        intensity_MTF_field.set_values_inside_window(modulation_transfer_function)
-
-        intensity_point_spread_function = intensity_MTF_field.fourier_transformed_values().real
-
-        # Square root to get PSF for amplitude rather than intensity
-        amplitude_point_spread_function = np.sqrt(intensity_point_spread_function)
-
-        # Normalize to make the PSF weights sum to unity
-        amplitude_point_spread_function /= np.sum(amplitude_point_spread_function, axis=(1, 2))[:, np.newaxis, np.newaxis]
-
-        amplitude_PSF_field = fields.SpectralField(self.grid, self.wavelengths,
-                                                   initial_value=amplitude_point_spread_function,
-                                                   dtype='float64',
-                                                   use_memmap=use_memmap,
-                                                   copy_initial_array=False)
-
-        amplitude_MTF_field = amplitude_PSF_field.to_fourier_space(inverse=True, transform_grid=False)
-
-        return amplitude_MTF_field
-
-    def apply(self, combined_field):
-        combined_field.multiply_within_window(self.compute_amplitude_modulation_field().values)
-
-    def generate_field(self, use_memmap=False):
-        self.generated_field = self.compute_amplitude_modulation_field(use_memmap=use_memmap)
-
-    def apply_generated_field(self, combined_field):
-        combined_field.multiply_within_window(self.generated_field.values)
+        point_spread_function = self.compute_point_spread_function()
+        convolved_field = scipy.signal.fftconvolve(field.values, point_spread_function, mode='same', axes=(1, 2))
+        field.set_values_inside_window(convolved_field)
 
 
-class KolmogorovPhaseScreen(KolmogorovTurbulence):
+class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.MultiplicativeFieldProcessor):
     '''
     Class for computing the phase perturbations of the incident light field across the telescope aperture
     due to turbulece in the atmosphere (seeing). The subharmonic method is based on Johansson & Gavel (1994).
     '''
-    def __init__(self, *turbulence_args, **turbulence_kwargs, n_subharmonic_levels=0, outer_scale=np.inf):
-        super().__init__(*turbulence_args, **turbulence_kwargs)
-        self.n_subharmonic_levels = n_subharmonic_levels # Number of subharmonic grids to use for improving large-scale accuracy
-        self.outer_scale = outer_scale # Largest size of the turbulent eddies [m]
+    def __init__(self, reference_fried_parameter,
+                 reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0,
+                 n_subharmonic_levels=0, outer_scale=np.inf):
 
-    def initialize_spectral_grid(self, grid, wavelengths):
-        self.grid = grid
-        self.wavelengths = wavelengths
+        super().__init__(reference_fried_parameter,
+                         reference_wavelength=reference_wavelength,
+                         reference_zenith_angle=reference_zenith_angle,
+                         zenith_angle=zenith_angle)
 
-        self.setup_phase_screen_grid(0)
+        self.n_subharmonic_levels = int(n_subharmonic_levels) # Number of subharmonic grids to use for improving large-scale accuracy
+        self.outer_scale = float(outer_scale) # Largest size of the turbulent eddies [m]
+
+    def precompute_processing_quantities(self):
+        '''
+        Implements the FieldProcessor method called after recieveing the properties of the aperture field.
+        '''
+        self.initialize_phase_screen()
+
+    def initialize_phase_screen(self,  width_doublings=0):
+
+        self.setup_phase_screen_grid(width_doublings)
 
         # Precompute constant quantities for use with the filter functions
         self.compute_filter_function_constants()
@@ -144,7 +168,7 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence):
 
         self.screen_grid = grids.FFTGrid(grid_size_exponent_x, grid_size_exponent_y,
                                          normalized_screen_extent_x, normalized_screen_extent_y,
-                                         is_centered=True, unit_type='aperture')
+                                         is_centered=True, grid_type='aperture')
 
     def setup_phase_screen_canvas(self):
         self.phase_screen_canvas = next(self.phase_screen_generator)
@@ -189,20 +213,20 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence):
         normalized_x_frequency_mesh, normalized_y_frequency_mesh = np.meshgrid(normalized_x_frequencies, normalized_y_frequencies, indexing='xy')
 
         normalized_distance_frequencies_squared = normalized_x_frequency_mesh**2 + normalized_y_frequency_mesh**2
-        normalized_distance_frequencies_squared[self.screen_grid.center_index_y, self.screen_grid.center_index_x] = 1 # Mask zero frequency to avoid division by zero
+        normalized_distance_frequencies_squared[self.screen_grid.shift_y, self.screen_grid.shift_x] = 1 # Mask zero frequency to avoid division by zero
 
         distance_frequencies_squared = np.multiply.outer(self.inverse_wavelengths_squared, normalized_distance_frequencies_squared)
 
         filter_functions = self.filter_function_scale*self.inverse_wavelengths_squared[:, np.newaxis, np.newaxis]/(distance_frequencies_squared + self.outer_scale_frequency_squared)**(11/12)
-        filter_functions[:, self.screen_grid.center_index_y, self.screen_grid.center_index_x] = 0 # Average phase perturbation (corresponds to zero frequency) should be zero
+        filter_functions[:, self.screen_grid.shift_y, self.screen_grid.shift_x] = 0 # Average phase perturbation (corresponds to zero frequency) should be zero
 
         # Scale to account for overlap of subharmonic grid
         if self.n_subharmonic_levels > 0:
             for offset in [-1, 1]:
-                filter_functions[:, self.screen_grid.center_index_y + offset, self.screen_grid.center_index_x]          *= 0.5
-                filter_functions[:, self.screen_grid.center_index_y,          self.screen_grid.center_index_x + offset] *= 0.5
-                filter_functions[:, self.screen_grid.center_index_y + offset, self.screen_grid.center_index_x + offset] *= 0.75
-                filter_functions[:, self.screen_grid.center_index_y + offset, self.screen_grid.center_index_x - offset] *= 0.75
+                filter_functions[:, self.screen_grid.shift_y + offset, self.screen_grid.shift_x]          *= 0.5
+                filter_functions[:, self.screen_grid.shift_y,          self.screen_grid.shift_x + offset] *= 0.5
+                filter_functions[:, self.screen_grid.shift_y + offset, self.screen_grid.shift_x + offset] *= 0.75
+                filter_functions[:, self.screen_grid.shift_y + offset, self.screen_grid.shift_x - offset] *= 0.75
 
         return filter_functions
 
@@ -310,20 +334,14 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence):
             autocorrelation += self.compute_low_frequency_autocorrelation()
         return 2*(autocorrelation[:, 0:1, 0:1] - autocorrelation)
 
-    def apply(self, combined_field):
-        combined_field.multiply_within_window(self.get_phase_screen_covering_aperture())
-
-    def generate_field(self, use_memmap=False):
-        self.generated_field = fields.SpectralField(self.grid, self.wavelengths,
-                                                    initial_value=0,
-                                                    dtype='complex128',
-                                                    use_memmap=use_memmap)
-
-        self.generated_field.set_values_inside_window(self.get_phase_screen_covering_aperture())
-
-    def apply_generated_field(self, combined_field):
-        combined_field.multiply_within_window(self.generated_field.values)
-
+    def process(self, field):
+        '''
+        Implements the FieldProcessor method for modulating the given field with the
+        turbulence modulation field.
+        '''
+        phase_perturbations = self.get_phase_screen_covering_aperture()
+        modulation_field_values = np.cos(phase_perturbations) + 1j*np.sin(phase_perturbations)
+        field.multiply_within_window(modulation_field_values)
 
 
 class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
@@ -333,30 +351,22 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
     generated on demand and spliced together. The splicing method is based on Vorontsov et al. (2008).
     '''
 
-    def __init__(self, *turbulence_args, wind_speed, **turbulence_kwargs):
-        super().__init__(*turbulence_args, **turbulence_kwargs)
-        self.wind_speed = wind_speed
+    def __init__(self, reference_fried_parameter, wind_speed,
+                 reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0,
+                 n_subharmonic_levels=0, outer_scale=np.inf):
 
-    def initialize_spectral_grid(self, grid, wavelengths):
-        self.grid = grid
-        self.wavelengths = wavelengths
+        super().__init__(reference_fried_parameter,
+                         reference_wavelength=reference_wavelength,
+                         reference_zenith_angle=reference_zenith_angle,
+                         zenith_angle=zenith_angle)
 
-        self.setup_phase_screen_grid(1)
+        self.wind_speed = float(wind_speed) # Speed at which the phase screen moves across the aperture [m/s]
 
-        # Precompute constant quantities for use with the filter functions
-        self.compute_filter_function_constants()
-
-        # Compute filter functions
-        self.filter_functions = self.compute_filter_functions()
-
-        if self.n_subharmonic_levels > 0:
-            self.subharmonic_filter_functions = self.compute_subharmonic_filter_functions()
-
-        # Initialize phase screen
-        self.phase_screen_generator = self.generate_phase_screen()
-        self.setup_phase_screen_canvas()
-
-        self.aperture_shift = 0
+    def precompute_processing_quantities(self):
+        '''
+        Implements the FieldProcessor method called after recieveing the properties of the aperture field.
+        '''
+        self.initialize_phase_screen(width_doublings=1)
 
     def compute_temporal_quantities(self):
 
@@ -393,17 +403,17 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         '''
 
         # Create canvas that fits 1.5 phase screens in width
-        self.phase_screen_canvas = np.zeros((len(self.wavelengths), self.n_screen_grid_cells_y, self.screen_grid.center_index_x*3))
+        self.phase_screen_canvas = np.zeros((len(self.wavelengths), self.n_screen_grid_cells_y, self.screen_grid.shift_x*3))
 
         # Insert the first phase screen into the leftmost two thirds of the canvas
         self.phase_screen_canvas[:, :, :self.screen_grid.size_x] = next(self.phase_screen_generator)
 
         # Scale the initial phase screen so that it tapers off to the right
-        self.phase_screen_canvas[:, :, self.screen_grid.center_index_x:self.screen_grid.center_index_x*2] *= self.tapering_function[:, :, self.screen_grid.center_index_x:]
+        self.phase_screen_canvas[:, :, self.screen_grid.shift_x:self.screen_grid.shift_x*2] *= self.tapering_function[:, :, self.screen_grid.shift_x:]
 
         # Generate the next phase screen, taper it in both ends and add to the rightmost two thirds of the canvas,
         # merging with the initial phase screen in the middle
-        self.phase_screen_canvas[:, :, self.screen_grid.center_index_x:] += next(self.phase_screen_generator)*self.tapering_function
+        self.phase_screen_canvas[:, :, self.screen_grid.shift_x:] += next(self.phase_screen_generator)*self.tapering_function
 
     def move_phase_screen(self, time_step):
         '''
@@ -424,23 +434,23 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         self.time += time_step
 
         # Handle shifting past the middle of the canvas
-        if self.aperture_shift + self.grid.window.shape[1] >= 2*self.screen_grid.center_index_x:
+        if self.aperture_shift + self.grid.window.shape[1] >= 2*self.screen_grid.shift_x:
 
             # Generate an empty canvas
             new_phase_screen_canvas = np.zeros(self.phase_screen_canvas.shape)
 
             # Insert the phase screen occupying the rightmost two thirds of the old canvas into the leftmost two thirds of the new canvas
-            new_phase_screen_canvas[:, :, :self.screen_grid.center_index_x*2] = self.phase_screen_canvas[:, :, self.screen_grid.center_index_x:]
+            new_phase_screen_canvas[:, :, :self.screen_grid.shift_x*2] = self.phase_screen_canvas[:, :, self.screen_grid.shift_x:]
 
             # Generate the next phase screen, taper it in both ends and add to the rightmost two thirds of the canvas,
             # merging with the existing phase screen in the middle
-            new_phase_screen_canvas[:, :, self.screen_grid.center_index_x:] += next(self.phase_screen_generator)*self.tapering_function
+            new_phase_screen_canvas[:, :, self.screen_grid.shift_x:] += next(self.phase_screen_generator)*self.tapering_function
 
             # Use the new canvas
             self.phase_screen_canvas = new_phase_screen_canvas
 
             # Move aperture back one third of the canvas
-            self.aperture_shift -= self.screen_grid.center_index_x
+            self.aperture_shift -= self.screen_grid.shift_x
 
     def get_coherence_time(self):
         return self.coherence_time
