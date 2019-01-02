@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from __future__ import division, print_function, absolute_import
+# This file is part of the APSimulator API.
+# Author: Lars Frogner
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
