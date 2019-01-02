@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# This file is part of the APSimulator API.
+# Author: Lars Frogner
 import numpy as np
 import numba
 
@@ -49,11 +51,45 @@ def direction_vector_from_spherical_angles(polar_angle, azimuth_angle):
     return direction_vector_x, direction_vector_y
 
 
+def polar_angle_from_direction_vector(direction_vector_x, direction_vector_y):
+    '''
+    Computes the spherical polar angle corresponding to the given unit direction vector.
+    '''
+    direction_vector_z_squared = 1 - direction_vector_x**2 - direction_vector_y**2
+    polar_angle = np.arccos(np.sqrt(direction_vector_z_squared))
+    return polar_angle
+
+def azimuth_angle_from_direction_vector(direction_vector_x, direction_vector_y):
+    '''
+    Computes the spherical azimuth angle corresponding to the given unit direction vector.
+    '''
+    azimuth_angle = np.arctan2(direction_vector_y, direction_vector_x)
+    return azimuth_angle
+
+
+def spherical_angles_from_direction_vector(direction_vector_x, direction_vector_y):
+    '''
+    Computes the spherical polar and azimuth angle corresponding to the given
+    unit direction vector.
+    '''
+    polar_angle = polar_angle_from_direction_vector(direction_vector_x, direction_vector_y)
+    azimuth_angle = azimuth_angle_from_direction_vector(direction_vector_x, direction_vector_y)
+    return polar_angle, azimuth_angle
+
+
 def direction_vector_extent_from_polar_angle(polar_angle):
+    '''
+    Computes the value of a component of the unit direction vector given by
+    a polar angle along the direction of that component.
+    '''
     return np.sin(polar_angle)
 
 
 def polar_angle_from_direction_vector_extent(direction_vector_extent):
+    '''
+    Computes the polar angle along the direction of a component of the unit direction
+    vector, given the value of that component.
+    '''
     return np.arcsin(direction_vector_extent)
 
 
