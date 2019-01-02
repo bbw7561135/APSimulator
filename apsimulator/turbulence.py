@@ -102,6 +102,12 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
         # Normalize to ensure energy conservation
         point_spread_function /= np.sum(point_spread_function, axis=(1,2))[:, np.newaxis, np.newaxis]
 
+        # Trim edges to reduce the size of the PSF array, by only keeping a central region covering 4 FWHMs
+        psf_window_angular_halfwidth = 2*np.max(self.compute_approximate_time_averaged_FWHM(self.wavelengths))
+        psf_window_halfwidth = math_utils.direction_vector_extent_from_polar_angle(psf_window_angular_halfwidth)
+        x_index_range, y_index_range = self.grid.get_index_ranges((-psf_window_halfwidth, psf_window_halfwidth), (-psf_window_halfwidth, psf_window_halfwidth))
+        point_spread_function = point_spread_function[:, y_index_range[0]-1:y_index_range[1], x_index_range[0]-1:x_index_range[1]]
+
         return point_spread_function
 
     def process(self, field):
@@ -110,7 +116,10 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
         time-averaged turbulence point spread function.
         '''
         point_spread_function = self.compute_point_spread_function()
-        convolved_field = scipy.signal.fftconvolve(field.values, point_spread_function, mode='same', axes=(1, 2))
+
+        convolved_field = scipy.signal.fftconvolve(field.get_values_inside_window(),
+                                                   point_spread_function,
+                                                   mode='same', axes=(1, 2))
         field.set_values_inside_window(convolved_field)
 
 
