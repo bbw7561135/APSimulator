@@ -56,7 +56,7 @@ class FraunhoferImager:
 
         # Compute the scale factors required to obtain image fluxes from the squared Fourier coefficients
         # of the aperture field.
-        self.flux_scales = (wavelengths*(aperture_grid.compute_cell_area()/self.focal_length))**2
+        self.flux_scales = (wavelengths*(aperture_grid.get_cell_area()/self.focal_length))**2
 
         self.image_field = fields.SpectralField(self.image_grid, self.wavelengths,
                                                 initial_value=0,
@@ -73,7 +73,7 @@ class FraunhoferImager:
         assert self.has_image_field
 
         # Compute the Fourier transform of the modulated aperture field
-        fourier_coefficients = modulated_aperture_field.fourier_transformed_values()
+        fourier_coefficients = modulated_aperture_field.compute_fourier_transformed_values()
 
         # Construct complex field of Fourier coefficients on the image grid
         fourier_transformed_field = fields.SpectralField(self.image_grid, self.wavelengths,
@@ -90,7 +90,7 @@ class FraunhoferImager:
         self.image_field.set_values_inside_window(spectral_fluxes_inside_window)
 
     def compute_spectral_powers_of_image_field(self, image_field):
-        return np.sum(image_field.get_values_inside_window(), axis=(1, 2))*self.focal_length**2*self.image_grid.compute_cell_area()
+        return np.sum(image_field.get_values_inside_window(), axis=(1, 2))*self.focal_length**2*self.image_grid.get_cell_area()
 
     def compute_spectral_powers(self):
         assert self.has_image_field
