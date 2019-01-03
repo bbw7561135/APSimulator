@@ -23,8 +23,8 @@ class ImagingSystem:
         self.wavelengths = np.asfarray(wavelengths) # Array of wavelengths for the incident light [m]
         self.use_memmaps = bool(use_memmaps) # Whether to conserve memory at the cost of performance by storing fields in memory mapped files
 
-        self.n_wavelengths = len(self.wavelengths)
         assert(self.wavelengths.ndim == 1)
+        self.n_wavelengths = self.wavelengths.size
 
         self.initialize_fields()
 
@@ -128,7 +128,7 @@ class ImagingSystem:
                                            self.field_of_view_x, self.field_of_view_y,
                                            use_memmap=self.use_memmaps)
 
-        self.image_postprocessing_pipeline = field_processing.FieldProcessingPipeline(self.imager.get_image_field().construct_window_field(copy_values=False))
+        self.image_postprocessing_pipeline = field_processing.FieldProcessingPipeline(self.imager.get_image_field().create_window_field(copy_values=False))
 
     def add_source(self, label, source, store_field=False):
         self.source_pipeline.add_field_processor(label, source, store_process_field_if_possible=store_field)
@@ -143,7 +143,7 @@ class ImagingSystem:
     def run_full_propagation(self):
         self.compute_source_field()
         self.compute_aperture_field()
-        self.compute_aperture_modulation()
+        self.compute_modulated_aperture_field()
         self.compute_image_field()
         self.compute_postprocessed_image_field()
         self.compute_filtered_image_field()
@@ -161,9 +161,9 @@ class ImagingSystem:
         out over a very short time).
         '''
         total_source_field = self.get_source_field()
-        self.aperture_field.set_values_inside_window(total_source_field.fourier_transformed_values())
+        self.aperture_field.set_values_inside_window(total_source_field.compute_fourier_transformed_values())
 
-    def compute_aperture_modulation(self):
+    def compute_modulated_aperture_field(self):
         self.aperture_modulation_pipeline.compute_processed_field()
 
     def compute_transmitted_aperture_field(self):
@@ -173,14 +173,9 @@ class ImagingSystem:
         aperture.process(transmitted_aperture_field)
         return transmitted_aperture_field
 
-    def compute_modulated_aperture_field(self):
-        total_modulation_field = self.get_modulated_aperture_field()
-        modulated_aperture_field = self.get_aperture_field().multiplied_within_window(total_modulation_field.values)
-        return modulated_aperture_field
-
     def compute_image_field(self):
         assert self.has_imager
-        self.imager.compute_image_field(self.compute_modulated_aperture_field())
+        self.imager.compute_image_field(self.get_modulated_aperture_field())
 
     def compute_postprocessed_image_field(self):
         assert self.has_imager
@@ -231,13 +226,13 @@ class ImagingSystem:
         return 1.22*wavelength/self.imager.get_aperture_diameter()
 
     def compute_spectral_powers_of_aperture_field(self, aperture_field):
-        return np.sum(math_utils.abs2(aperture_field.get_values_inside_window()), axis=(1, 2))*self.wavelengths**2*self.aperture_grid.compute_cell_area()
+        return np.sum(math_utils.abs2(aperture_field.get_values_inside_window()), axis=(1, 2))*self.wavelengths**2*self.aperture_grid.get_cell_area()
 
     def compute_incident_spectral_powers(self):
         return self.compute_spectral_powers_of_aperture_field(self.compute_transmitted_aperture_field())
 
     def compute_modulated_spectral_powers(self):
-        return self.compute_spectral_powers_of_aperture_field(self.compute_modulated_aperture_field())
+        return self.compute_spectral_powers_of_aperture_field(self.get_modulated_aperture_field())
 
     def visualize_energy_conservation(self):
         assert self.has_imager
@@ -275,11 +270,8 @@ class ImagingSystem:
     def visualize_aperture_field(self, **plot_kwargs):
         fields.visualize_field(self.get_aperture_field(), **plot_kwargs)
 
-    def visualize_total_aperture_modulation_field(self, **plot_kwargs):
-        fields.visualize_field(self.get_modulated_aperture_field(), **plot_kwargs)
-
     def visualize_modulated_aperture_field(self, **plot_kwargs):
-        fields.visualize_field(self.compute_modulated_aperture_field(), **plot_kwargs)
+        fields.visualize_field(self.get_modulated_aperture_field(), **plot_kwargs)
 
     def visualize_image_field(self, **plot_kwargs):
         fields.visualize_field(self.get_image_field(), **plot_kwargs)
