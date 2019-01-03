@@ -16,14 +16,18 @@ class Regular2DField:
         self.grid = grid # Grid2D object representing the shape and physical dimensions of the field
         self.dtype = str(dtype) # Numpy data type to use for the field values
         self.use_memmap = bool(use_memmap) # Whether to store the field values in a memory mapped file
-        self.copy_initial_array = bool(copy_initial_array) # If initial_value is an array, this specifies
+        self.copy_initial_array = bool(copy_initial_array) # If initial_value is an array (or memmap), this specifies
                                                            # whether to copy the values or use a reference
 
         self.initialize_shape()
         self.initialize_values(initial_value)
 
+    def create_constructor_argument_list(self, **new_args):
+        return self.grid if not 'grid' in new_args else new_args['grid'],
+
     def initialize_shape(self):
         self.shape = self.grid.shape
+        self.window_shape = self.grid.window.shape
 
     def initialize_values(self, initial_value):
 
@@ -35,7 +39,7 @@ class Regular2DField:
         else:
             initial_value = float(initial_value)
 
-        if self.use_memmap:
+        if self.use_memmap and not (inital_value_is_array and not self.copy_initial_array):
             # Store the field values in a memory mapped file.
             # It will automatically be deleted when the memmap object goes out of scope.
             with tempfile.NamedTemporaryFile() as temporary_file:
@@ -47,6 +51,14 @@ class Regular2DField:
             else:
                 # Initialize value array with constant number
                 self.values = np.full(self.shape, initial_value, dtype=self.dtype)
+
+    def window_view(self, values):
+        assert values.shape == self.shape
+        window = self.grid.window
+        return values[window.y.start:window.y.end, window.x.start:window.x.end]
+
+    def get_values_inside_window(self):
+        return self.window_view(self.values)
 
     def set_constant_value(self, constant_value):
         self.values[:] = float(constant_value)
@@ -78,26 +90,6 @@ class Regular2DField:
         self.dtype = self.values.dtype
         return self
 
-
-class SpectralField(Regular2DField):
-    '''
-    Represents a field on a 2D grid with an added third dimension for wavelengths.
-    '''
-    def __init__(self, grid, wavelengths, initial_value=0, dtype='float64', use_memmap=False, copy_initial_array=True):
-        self.wavelengths = np.asfarray(wavelengths) # Array of wavelengths
-
-        self.n_wavelengths = len(self.wavelengths)
-        assert(self.wavelengths.ndim == 1)
-
-        super().__init__(grid, initial_value=initial_value, dtype=dtype,
-                         use_memmap=use_memmap, copy_initial_array=copy_initial_array)
-
-    def initialize_shape(self):
-        '''
-        Overrides the corresponding Field2D method and adds an additional dimension for wavelength.
-        '''
-        self.shape = (self.n_wavelengths, *self.grid.shape)
-
     def set_values_inside_window(self, values):
         '''
         Assigns the given array of values to the field values within the view window defined for
@@ -105,18 +97,15 @@ class SpectralField(Regular2DField):
         just to the shape of the window (with the size of the wavelength axis being the same).
         '''
         assert isinstance(values, np.ndarray)
-        assert values.shape == self.shape or values.shape == (self.n_wavelengths, *self.grid.window.shape)
+        assert values.shape == self.shape or values.shape == self.window_shape
         assert values.dtype == self.dtype
 
-        window = self.grid.window
+        window_values = self.get_values_inside_window()
 
         if values.shape == self.shape:
-            self.values[:, window.y.start:window.y.end,
-                           window.x.start:window.x.end] = values[:, window.y.start:window.y.end,
-                                                                    window.x.start:window.x.end]
+            window_values[:] = self.window_view(values)
         else:
-            self.values[:, window.y.start:window.y.end,
-                           window.x.start:window.x.end] = values
+            window_values[:] = values
 
     def multiply_within_window(self, factors):
         '''
@@ -125,17 +114,14 @@ class SpectralField(Regular2DField):
         of the window (with the size of the wavelength axis being the same)
         '''
         assert isinstance(factors, np.ndarray)
-        assert factors.shape == self.shape or factors.shape == (self.n_wavelengths, *self.grid.window.shape)
+        assert factors.shape == self.shape or factors.shape == self.window_shape
 
-        window = self.grid.window
+        window_values = self.get_values_inside_window()
 
         if factors.shape == self.shape:
-            self.values[:, window.y.start:window.y.end,
-                           window.x.start:window.x.end] *= factors[:, window.y.start:window.y.end,
-                                                                      window.x.start:window.x.end]
+            window_values[:] *= self.window_view(factors)
         else:
-            self.values[:, window.y.start:window.y.end,
-                           window.x.start:window.x.end] *= factors
+            window_values[:] *= factors
 
     def add_within_window(self, offsets):
         '''
@@ -144,36 +130,36 @@ class SpectralField(Regular2DField):
         just to the shape of the window (with the size of the wavelength axis being the same).
         '''
         assert isinstance(offsets, np.ndarray)
-        assert offsets.shape == self.shape or offsets.shape == (self.n_wavelengths, *self.grid.window.shape)
+        assert offsets.shape == self.shape or offsets.shape == self.window_shape
 
-        window = self.grid.window
+        window_values = self.get_values_inside_window()
 
         if offsets.shape == self.shape:
-            self.values[:, window.y.start:window.y.end,
-                           window.x.start:window.x.end] += offsets[:, window.y.start:window.y.end,
-                                                                      window.x.start:window.x.end]
+            window_values[:] += self.window_view(offsets)
         else:
-            self.values[:, window.y.start:window.y.end,
-                           window.x.start:window.x.end] += offsets
+            window_values[:] += offsets
 
     def copy(self, use_memmap=None):
-        return SpectralField(self.grid, self.wavelengths, initial_value=self.values,
-                             use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
-                             copy_initial_array=True)
+        return self.__class__(*self.create_constructor_argument_list(),
+                              initial_value=self.values,
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=True)
 
     def multiplied(self, factors, use_memmap=None):
         assert isinstance(factors, np.ndarray)
         assert factors.shape == self.shape
-        return SpectralField(self.grid, self.wavelengths, initial_value=self.values*factors,
-                             use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
-                             copy_initial_array=False)
+        return self.__class__(*self.create_constructor_argument_list(),
+                              initial_value=self.values*factors,
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=False)
 
     def added(self, offsets, use_memmap=None):
         assert isinstance(offsets, np.ndarray)
         assert offsets.shape == self.shape
-        return SpectralField(self.grid, self.wavelengths, initial_value=(self.values + offsets),
-                             use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
-                             copy_initial_array=False)
+        return self.__class__(*self.create_constructor_argument_list(),
+                              initial_value=(self.values + offsets),
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=False)
 
     def multiplied_within_window(self, factors, use_memmap=None):
         multiplied_field = self.copy(use_memmap=use_memmap)
@@ -190,20 +176,21 @@ class SpectralField(Regular2DField):
         Computes the 2D Fourier transform of the field values and returns the result as an array.
         If inverse=True, the inverse inverse Fourier transform is computed instead.
         '''
+        assert isinstance(self.grid, grids.FFTGrid)
+
         # Make sure the values to transform are not centered
-        uncentered_values = np.fft.ifftshift(self.values, axes=(1, 2)) if self.grid.is_centered else self.values
+        uncentered_values = np.fft.ifftshift(self.values, axes=(-2, -1)) if self.grid.is_centered else self.values
 
         # Perform FFT
-        fourier_coefficients = np.fft.ifft2(uncentered_values, axes=(1, 2)) if inverse else np.fft.fft2(uncentered_values, axes=(1, 2))
+        fourier_coefficients = np.fft.ifft2(uncentered_values, axes=(-2, -1)) if inverse else np.fft.fft2(uncentered_values, axes=(-2, -1))
 
         # Recenter the Fourier coefficients if necessary
-        recentered_fourier_coefficients = np.fft.fftshift(fourier_coefficients, axes=(1, 2)) if self.grid.is_centered else fourier_coefficients
+        recentered_fourier_coefficients = np.fft.fftshift(fourier_coefficients, axes=(-2, -1)) if self.grid.is_centered else fourier_coefficients
 
         return recentered_fourier_coefficients
 
     def fourier_transformed_values_inside_window(self, inverse=False):
-        window = self.grid.window
-        return self.fourier_transformed_values(inverse=inverse)[:, window.y.start:window.y.end, window.x.start:window.x.end]
+        return self.window_view(self.fourier_transformed_values(inverse=inverse))
 
     def to_fourier_space(self, inverse=False, transform_grid=True, use_memmap=None):
         '''
@@ -217,16 +204,81 @@ class SpectralField(Regular2DField):
         # Construct grid for the Fourier transformed field
         grid = self.grid.to_spatial_frequency_grid() if transform_grid else self.grid
 
-        return SpectralField(grid, self.wavelengths, initial_value=fourier_coefficients,
-                             use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
-                             copy_initial_array=False)
+        return self.__class__(*self.create_constructor_argument_list(grid=grid),
+                              initial_value=fourier_coefficients,
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=False)
 
-    def get_values_inside_window(self):
+    def construct_window_field(self, grid_type=None, use_memmap=None, copy_values=True):
+        '''
+        Returns a new field corresponding to the part of the current field inside
+        the grid window.
+        '''
+        window_grid = self.grid.construct_window_grid(grid_type=grid_type)
+        return self.__class__(*self.create_constructor_argument_list(grid=window_grid),
+                              initial_value=self.get_values_inside_window(),
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=copy_values)
+
+
+class SpectralField(Regular2DField):
+    '''
+    Represents a field on a 2D grid with an added third dimension for wavelengths.
+    '''
+    def __init__(self, grid, wavelengths, **field_kwargs):
+        self.wavelengths = np.asfarray(wavelengths) # Array of wavelengths
+
+        self.n_wavelengths = len(self.wavelengths)
+        assert(self.wavelengths.ndim == 1)
+
+        super().__init__(grid, **field_kwargs)
+
+    def create_constructor_argument_list(self, **new_args):
+        return self.grid if not 'grid' in new_args else new_args['grid'], \
+               self.wavelengths if not 'wavelengths' in new_args else new_args['wavelengths']
+
+    def initialize_shape(self):
+        '''
+        Overrides the corresponding Field2D method and adds an additional dimension for wavelength.
+        '''
+        self.shape = (self.n_wavelengths, *self.grid.shape)
+        self.window_shape = (self.n_wavelengths, *self.grid.window.shape)
+
+    def window_view(self, values):
+        assert values.shape == self.shape
         window = self.grid.window
-        return self.values[:, window.y.start:window.y.end, window.x.start:window.x.end]
+        return values[:, window.y.start:window.y.end, window.x.start:window.x.end]
 
 
-def visualize_field(field, only_window=True, approximate_wavelength=None, use_log=False, title='', output_path=None):
+class FilteredSpectralField(SpectralField):
+
+    def __init__(self, grid, central_wavelengths, filter_labels, **field_kwargs):
+
+        self.central_wavelengths = np.asfarray(central_wavelengths)
+
+        super().__init__(grid, self.central_wavelengths, **field_kwargs)
+
+        self.n_channels = self.n_wavelengths
+
+        self.filter_labels = list(filter_labels)
+        assert len(self.filter_labels) == len(self.central_wavelengths)
+
+        self.channels = {label: idx for label, idx in zip(self.filter_labels, range(self.n_channels))}
+
+    def create_constructor_argument_list(self, **new_args):
+        return self.grid if not 'grid' in new_args else new_args['grid'], \
+               self.wavelengths if not 'wavelengths' in new_args else new_args['wavelengths'], \
+               self.filter_labels if not 'filter_labels' in new_args else new_args['filter_labels']
+
+    def construct_field_for_channel(self, filter_label, use_memmap=None, copy_values=True):
+        assert filter_label in self.channels
+        return Regular2DField(self.grid,
+                              initial_value=self.values[self.channels[filter_label], :, :],
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=copy_values)
+
+
+def visualize_field(field, only_window=True, approximate_wavelength=None, filter_label=None, clipping_factor=1, use_log=False, title='', output_path=None):
 
     if only_window:
         field_values = field.get_values_inside_window()
@@ -235,17 +287,45 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, use_lo
         field_values = field.values
         extent = field.grid.get_bounds()
 
-    if isinstance(field, SpectralField):
+    use_colors = False
+    wavelength = None
+
+    vmin = None
+    vmax = None
+
+    if isinstance(field, FilteredSpectralField):
+        if filter_label is None:
+            use_colors = True
+            vmin = np.min(field_values)
+            vmax = np.max(field_values)*clipping_factor
+            field_values = (field_values - vmin)/(vmax - vmin)
+            field_values = np.moveaxis(field_values, 0, 2)
+            clipping_factor = None
+            use_log = False
+        else:
+            channel_idx = field.channels[filter_label]
+            field_values = field_values[channel_idx, :, :]
+            wavelength = field.central_wavelengths[channel_idx]
+    elif isinstance(field, SpectralField):
         wavelength_idx = 0 if approximate_wavelength is None else np.argmin(np.abs(field.wavelengths - approximate_wavelength))
         wavelength = field.wavelengths[wavelength_idx]
         field_values = field_values[wavelength_idx, :, :]
-    else:
-        wavelength = 1
+
+    if clipping_factor is not None:
+        vmin = np.min(field_values)
+        vmax = np.max(field_values)*clipping_factor
 
     log_label = 'log10 ' if use_log else ''
 
+    if wavelength is None:
+        wavelength = 1
+    else:
+        wavelength_text = '{:g} nm'.format(wavelength*1e9)
+        title = wavelength_text if title == '' else '{} ({})'.format(title, wavelength_text)
+
     xlabel = r'$x$'
     ylabel = r'$y$'
+    phase_clabel = 'Field phase [rad]'
 
     if field.grid.grid_type == 'source':
         xlabel = r'$d_x$'
@@ -255,7 +335,6 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, use_lo
         xlabel = r'$x$ [m]'
         ylabel = r'$y$ [m]'
         clabel = '{}Field amplitude [sqrt(W/m^2/m)]'.format(log_label)
-        phase_clabel = 'Field phase [rad]'
         extent *= wavelength
     elif field.grid.grid_type == 'image':
         xlabel = r'$x$ [focal lengths]'
@@ -264,7 +343,7 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, use_lo
 
     fig = plt.figure()
 
-    if field.grid.grid_type == 'aperture' and field.dtype == 'complex128':
+    if field.dtype == 'complex128' and not use_colors:
 
         left_ax = fig.add_subplot(121)
         amplitudes = np.abs(field_values)
@@ -280,7 +359,7 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, use_lo
         ax = fig.add_subplot(111)
         field_values = field_values.astype('float64')
         field_values = np.log10(field_values) if use_log else field_values
-        plot_utils.plot_image(fig, ax, field_values, xlabel=xlabel, ylabel=ylabel, title=title, extent=extent, clabel=clabel)
+        plot_utils.plot_image(fig, ax, field_values, vmin=vmin, vmax=vmax, xlabel=xlabel, ylabel=ylabel, title=title, extent=extent, clabel=clabel, colorbar=(not use_colors))
 
     plt.tight_layout()
 
