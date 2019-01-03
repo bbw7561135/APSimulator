@@ -87,6 +87,20 @@ class Regular2DGrid:
         self.window = IndexRange2D(x_index_range[0], x_index_range[1],
                                    y_index_range[0], y_index_range[1])
 
+    def construct_window_grid(self, grid_type=None):
+        '''
+        Returns a new grid corresponding to the part of the current grid inside
+        the grid window.
+        '''
+        window_size_x = self.window.shape[1]
+        window_size_y = self.window.shape[0]
+        window_extent_x = window_size_x*self.cell_extent_x
+        window_extent_y = window_size_y*self.cell_extent_y
+        return Regular2DGrid(window_size_x, window_size_y, window_extent_x, window_extent_y,
+                             shift_x=self.shift_x - (self.size_x - window_size_x)//2,
+                             shift_y=self.shift_y - (self.size_y - window_size_y)//2,
+                             grid_type=(self.grid_type if grid_type is None else grid_type))
+
     def get_bounds(self, x_index_range=(0, -1), y_index_range=(0, -1)):
         '''
         Finds the coordinate ranges corresponding to the given index ranges.
@@ -95,8 +109,8 @@ class Regular2DGrid:
         '''
         assert len(x_index_range) == 2
         assert len(y_index_range) == 2
-        return np.array([self.x_coordinates[x_index_range[0]], self.x_coordinates[x_index_range[1]],
-                         self.y_coordinates[y_index_range[0]], self.y_coordinates[y_index_range[1]]])
+        return np.array([self.x_coordinates[x_index_range[0]], self.x_coordinates[x_index_range[1]-1],
+                         self.y_coordinates[y_index_range[0]], self.y_coordinates[y_index_range[1]-1]])
 
     def get_coordinate_meshes(self):
         return self.x_coordinate_mesh, self.y_coordinate_mesh
