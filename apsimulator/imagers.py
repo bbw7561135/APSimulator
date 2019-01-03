@@ -95,6 +95,3 @@ class FraunhoferImager:
     def compute_spectral_powers(self):
         assert self.has_image_field
         return self.compute_spectral_powers_of_image_field(self.image_field)
-
-    def visualize(self, **plot_kwargs):
-        fields.visualize_field(self.image_field, **plot_kwargs)
