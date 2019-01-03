@@ -105,7 +105,7 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
         # Trim edges to reduce the size of the PSF array, by only keeping a central region covering 4 FWHMs
         psf_window_angular_halfwidth = 2*np.max(self.compute_approximate_time_averaged_FWHM(self.wavelengths))
         psf_window_halfwidth = math_utils.direction_vector_extent_from_polar_angle(psf_window_angular_halfwidth)
-        x_index_range, y_index_range = self.grid.get_index_ranges((-psf_window_halfwidth, psf_window_halfwidth), (-psf_window_halfwidth, psf_window_halfwidth))
+        x_index_range, y_index_range = self.grid.find_index_ranges((-psf_window_halfwidth, psf_window_halfwidth), (-psf_window_halfwidth, psf_window_halfwidth))
         point_spread_function = point_spread_function[:, y_index_range[0]-1:y_index_range[1], x_index_range[0]-1:x_index_range[1]]
 
         return point_spread_function
@@ -187,7 +187,7 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         Computes quantities that will be used repeatedly for computing filter functions.
         '''
         self.filter_function_scale = 2*np.pi*np.sqrt(0.00058)*self.reference_wavelength\
-                                        /(self.reference_fried_parameter**(5/6)*np.sqrt(self.screen_grid.compute_area()))
+                                        /(self.reference_fried_parameter**(5/6)*np.sqrt(self.screen_grid.get_area()))
         self.outer_scale_frequency_squared = 1/self.outer_scale**2
         self.inverse_wavelengths_squared = 1/self.wavelengths**2
 
@@ -275,7 +275,7 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         function and taking the inverse Fourier transform.
         '''
         noise = self.generate_white_noise((self.screen_grid.size_y, self.screen_grid.size_x))
-        return self.screen_grid.compute_total_size()*np.fft.ifft2(np.fft.ifftshift(noise[np.newaxis, :, :]*self.filter_functions,
+        return self.screen_grid.get_total_size()*np.fft.ifft2(np.fft.ifftshift(noise[np.newaxis, :, :]*self.filter_functions,
                                                                                    axes=(1, 2)),
                                                                   axes=(1, 2)).real
 
@@ -304,13 +304,13 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         '''
         Returns a view into the part of the phase screen canvas currently covering the aperture window.
         '''
-        return self.phase_screen_canvas[:, :self.grid.window.shape[0], self.aperture_shift:self.aperture_shift+self.grid.window.shape[1]]
+        return self.phase_screen_canvas[:, :self.grid.window.size_y, self.aperture_shift:self.aperture_shift+self.grid.window.size_x]
 
     def get_monochromatic_phase_screen_covering_aperture(self, wavelength_idx):
         '''
         Like get_phase_screen_covering_aperture, but only returns the screen for a given wavelength index.
         '''
-        return self.phase_screen_canvas[wavelength_idx, :self.grid.window.shape[0], self.aperture_shift:self.aperture_shift+self.grid.window.shape[1]]
+        return self.phase_screen_canvas[wavelength_idx, :self.grid.window.size_y, self.aperture_shift:self.aperture_shift+self.grid.window.size_x]
 
     def compute_perturbation_field(self):
         '''
@@ -324,7 +324,7 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         Computes the analytical autocorrelation function for the part of the model without any subharmonic
         components.
         '''
-        return self.screen_grid.compute_total_size()*np.fft.ifft2(np.fft.ifftshift(self.filter_functions**2,
+        return self.screen_grid.get_total_size()*np.fft.ifft2(np.fft.ifftshift(self.filter_functions**2,
                                                                                    axes=(1, 2)),
                                                                   axes=(1, 2)).real
 
@@ -392,7 +392,7 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         self.min_time_step = self.grid.cell_extent_x/self.normalized_wind_speed
 
         # Time for a point on the normalized grid to traverse the aperture [s]
-        self.aperture_crossing_duration = self.grid.window.shape[1]*self.grid.cell_extent_x/self.normalized_wind_speed
+        self.aperture_crossing_duration = self.grid.window.size_x*self.grid.cell_extent_x/self.normalized_wind_speed
 
         # Elapsed time [s]
         self.time = 0
@@ -412,7 +412,7 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         '''
 
         # Create canvas that fits 1.5 phase screens in width
-        self.phase_screen_canvas = np.zeros((len(self.wavelengths), self.n_screen_grid_cells_y, self.screen_grid.shift_x*3))
+        self.phase_screen_canvas = np.zeros((self.n_wavelengths, self.n_screen_grid_cells_y, self.screen_grid.shift_x*3))
 
         # Insert the first phase screen into the leftmost two thirds of the canvas
         self.phase_screen_canvas[:, :, :self.screen_grid.size_x] = next(self.phase_screen_generator)
@@ -443,7 +443,7 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         self.time += time_step
 
         # Handle shifting past the middle of the canvas
-        if self.aperture_shift + self.grid.window.shape[1] >= 2*self.screen_grid.shift_x:
+        if self.aperture_shift + self.grid.window.size_x >= 2*self.screen_grid.shift_x:
 
             # Generate an empty canvas
             new_phase_screen_canvas = np.zeros(self.phase_screen_canvas.shape)
