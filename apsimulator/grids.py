@@ -14,7 +14,9 @@ class IndexRange2D:
     def __init__(self, x_start, x_end, y_start, y_end):
         self.x = IndexRange(x_start, x_end)
         self.y = IndexRange(y_start, y_end)
-        self.shape = (y_end - y_start, x_end - x_start)
+        self.size_x = x_end - x_start
+        self.size_y = y_end - y_start
+        self.shape = (self.size_y, self.size_x)
 
 
 class Regular2DGrid:
@@ -59,7 +61,7 @@ class Regular2DGrid:
         '''
         self.window = IndexRange2D(0, self.size_x, 0, self.size_y)
 
-    def scaled(self, scale, grid_type=None):
+    def create_scaled_grid(self, scale, grid_type=None):
         '''
         Returns a new grid with scaled extents. By default the grid type identifier is copied
         to the new grid, but a new identifier can be specified by setting the grid_type argument.
@@ -68,7 +70,7 @@ class Regular2DGrid:
                              shift_x=self.shift_x, shift_y=self.shift_y,
                              grid_type=(self.grid_type if grid_type is None else grid_type))
 
-    def get_index_ranges(self, x_coordinate_range, y_coordinate_range):
+    def find_index_ranges(self, x_coordinate_range, y_coordinate_range):
         '''
         Finds the index ranges corresponding the given coordinate ranges.
         The indec ranges are lower inclusive and upper exclusive.
@@ -83,22 +85,19 @@ class Regular2DGrid:
         '''
         Creates a new grid window corresponding to the given coordinate ranges.
         '''
-        x_index_range, y_index_range = self.get_index_ranges(x_coordinate_range, y_coordinate_range)
+        x_index_range, y_index_range = self.find_index_ranges(x_coordinate_range, y_coordinate_range)
         self.window = IndexRange2D(x_index_range[0], x_index_range[1],
                                    y_index_range[0], y_index_range[1])
 
-    def construct_window_grid(self, grid_type=None):
+    def create_window_grid(self, grid_type=None):
         '''
         Returns a new grid corresponding to the part of the current grid inside
         the grid window.
         '''
-        window_size_x = self.window.shape[1]
-        window_size_y = self.window.shape[0]
-        window_extent_x = window_size_x*self.cell_extent_x
-        window_extent_y = window_size_y*self.cell_extent_y
-        return Regular2DGrid(window_size_x, window_size_y, window_extent_x, window_extent_y,
-                             shift_x=self.shift_x - (self.size_x - window_size_x)//2,
-                             shift_y=self.shift_y - (self.size_y - window_size_y)//2,
+        window_extent_x, window_extent_y = self.get_window_extents()
+        return Regular2DGrid(self.window.size_x, self.window.size_y, window_extent_x, window_extent_y,
+                             shift_x=self.shift_x - (self.size_x - self.window.size_x)//2,
+                             shift_y=self.shift_y - (self.size_y - self.window.size_y)//2,
                              grid_type=(self.grid_type if grid_type is None else grid_type))
 
     def get_bounds(self, x_index_range=(0, -1), y_index_range=(0, -1)):
@@ -125,6 +124,21 @@ class Regular2DGrid:
         return self.get_bounds(x_index_range=(self.window.x.start, self.window.x.end),
                                y_index_range=(self.window.y.start, self.window.y.end))
 
+    def get_window_extents(self):
+        return self.window.size_x*self.cell_extent_x, self.window.size_y*self.cell_extent_y
+
+    def get_total_size(self):
+        return self.size_x*self.size_y
+
+    def get_total_window_size(self):
+        return self.window.size_x*self.window.size_y
+
+    def get_area(self):
+        return self.extent_x*self.extent_y
+
+    def get_cell_area(self):
+        return self.cell_extent_x*self.cell_extent_y
+
     def compute_squared_distances(self):
         return self.x_coordinate_mesh**2 + self.y_coordinate_mesh**2
 
@@ -137,18 +151,6 @@ class Regular2DGrid:
 
     def compute_distances_within_window(self):
         return np.sqrt(self.compute_squared_distances_within_window())
-
-    def compute_total_size(self):
-        return self.size_x*self.size_y
-
-    def compute_total_window_size(self):
-        return self.window.shape[0]*self.window.shape[1]
-
-    def compute_area(self):
-        return self.extent_x*self.extent_y
-
-    def compute_cell_area(self):
-        return self.cell_extent_x*self.cell_extent_y
 
 
 class FFTGrid(Regular2DGrid):
@@ -175,18 +177,18 @@ class FFTGrid(Regular2DGrid):
                          shift_x=shift_x, shift_y=shift_y,
                          grid_type=grid_type)
 
-    def scaled(self, scale, grid_type=None):
+    def create_scaled_grid(self, scale, grid_type=None):
         return self.__class__(self.size_exponent_x, self.size_exponent_y,
                               self.extent_x*scale, self.extent_y*scale,
                               is_centered=self.is_centered,
                               grid_type=(self.grid_type if grid_type is None else grid_type))
 
-    def centered(self):
+    def create_centered_grid(self):
         return self.__class__(self.size_exponent_x, self.size_exponent_y,
                               self.extent_x, self.extent_y,
                               is_centered=True)
 
-    def uncentered(self):
+    def create_uncentered_grid(self):
         return self.__class__(self.size_exponent_x, self.size_exponent_y,
                               self.extent_x, self.extent_y,
                               is_centered=False)
