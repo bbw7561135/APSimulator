@@ -151,14 +151,14 @@ class FieldProcessingPipeline:
         self.processed_field = self.original_field
         self.stages = collections.OrderedDict()
 
-    def add_field_processor(self, name, field_processor, store_process_field_if_possible=False):
+    def add_field_processor(self, label, field_processor, store_process_field_if_possible=False):
         '''
         Adds a new FieldProcessor. If store_process_field_if_possible=True, a field
         representing the process in isolation will be stored as an attribute of the
         FieldProcessingPipelineStage (provided that the FieldProcessor supports this).
         '''
-        assert not self.has_processor(name)
-        self.stages[name] = FieldProcessingPipelineStage(field_processor, self.original_field, store_process_field_if_possible)
+        assert not self.has_processor(label)
+        self.stages[label] = FieldProcessingPipelineStage(field_processor, self.original_field, store_process_field_if_possible)
 
     def compute_processed_field(self):
         '''
@@ -169,12 +169,12 @@ class FieldProcessingPipeline:
         for stage in self.stages.values():
             stage.process(self.processed_field)
 
-    def has_processor(self, name):
-        return name in self.stages
+    def has_processor(self, label):
+        return label in self.stages
 
-    def get_processor(self, name):
-        assert self.has_processor(name)
-        return self.stages[name].field_processor
+    def get_processor(self, label):
+        assert self.has_processor(label)
+        return self.stages[label].field_processor
 
     def get_original_field(self):
         return self.original_field
@@ -182,6 +182,6 @@ class FieldProcessingPipeline:
     def get_processed_field(self):
         return self.processed_field
 
-    def visualize_process_field(self, name, **plot_kwargs):
-        assert self.has_processor(name)
-        self.stages[name].visualize_process_field(**plot_kwargs)
+    def visualize_process_field(self, label, **plot_kwargs):
+        assert self.has_processor(label)
+        self.stages[label].visualize_process_field(**plot_kwargs)
