@@ -21,8 +21,8 @@ class FieldProcessor:
         self.wavelengths = unprocessed_field.wavelengths
         self.dtype = unprocessed_field.dtype
 
-        self.n_wavelengths = len(self.wavelengths)
         assert(self.wavelengths.ndim == 1)
+        self.n_wavelengths = self.wavelengths.size
 
         # Run possible additional precomputations
         self.precompute_processing_quantities()
