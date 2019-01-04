@@ -7,6 +7,7 @@ import tempfile
 import grids
 import plot_utils
 import image_utils
+import parallel_utils
 
 
 class Regular2DField:
@@ -179,6 +180,13 @@ class Regular2DField:
         '''
         assert isinstance(self.grid, grids.FFTGrid)
 
+    def compute_fourier_transformed_values(self, inverse=False):
+        '''
+        Computes the 2D Fourier transform of the field values and returns the result as an array.
+        If inverse=True, the inverse inverse Fourier transform is computed instead.
+        '''
+        assert isinstance(self.grid, grids.FFTGrid)
+
         # Make sure the values to transform are not centered
         uncentered_values = np.fft.ifftshift(self.values, axes=(-2, -1)) if self.grid.is_centered else self.values
 
@@ -249,6 +257,15 @@ class SpectralField(Regular2DField):
         assert values.shape == self.shape
         window = self.grid.window
         return values[:, window.y.start:window.y.end, window.x.start:window.x.end]
+
+    def compute_fourier_transformed_values(self, inverse=False):
+        '''
+        Computes the 2D Fourier transform of the field values and returns the result as an array.
+        If inverse=True, the inverse inverse Fourier transform is computed instead.
+        If n_threads > 1 in parallel_utils, the computations are parallellized over the wavelength axis.
+        '''
+        assert isinstance(self.grid, grids.FFTGrid)
+        return parallel_utils.parallel_fft2(self.values, centered=self.grid.is_centered, inverse=inverse)
 
 
 class FilteredSpectralField(SpectralField):
