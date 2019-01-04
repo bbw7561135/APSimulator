@@ -8,12 +8,31 @@ import math_utils
 import physics_utils
 
 
+def sum_overlapping_values(positions, values):
+    assert positions.ndim == 1
+    assert values.ndim == 2
+    assert values.shape[1] == positions.size
+
+    indices_of_positions_when_sorted = np.argsort(positions)
+    sorted_positions = positions[indices_of_positions_when_sorted]
+    unique_positions, start_indices_of_unique_positions = np.unique(sorted_positions, return_index=True)
+    indices_of_all_occurances_of_each_position = np.split(indices_of_positions_when_sorted, start_indices_of_unique_positions[1:])
+
+    summed_values = np.empty((values.shape[0], unique_positions.size))
+
+    for i in range(unique_positions.size):
+        summed_values[:, i] = np.sum(values[:, indices_of_all_occurances_of_each_position[i]], axis=1)
+
+    return unique_positions, summed_values
+
+
 class UniformStarField(field_processing.AdditiveFieldProcessor):
 
-    def __init__(self, stellar_density, near_distance, far_distance, seed=None):
+    def __init__(self, stellar_density, near_distance, far_distance, combine_overlapping_stars=False, seed=None):
         self.stellar_density = float(stellar_density) # Average number of stars per volume [1/m^3]
         self.near_distance = float(near_distance) # Distance to where the uniform star field begins [m]
         self.far_distance = float(far_distance) # Distance to where the uniform star field ends [m]
+        self.combine_overlapping_stars = bool(combine_overlapping_stars) # Whether to sum the fluxes of stars generated at the same position
         self.random_generator = np.random.RandomState(seed=seed)
 
         self.near_distance_cubed = self.near_distance**3
@@ -24,19 +43,6 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
 
     def compute_average_number_of_visible_stars(self, field_of_view_x, field_of_view_y):
         return self.stellar_density*self.compute_visible_star_field_volume(field_of_view_x, field_of_view_y)
-
-    def combine_duplicate_indices(self, indices, values):
-        assert indices.ndim == 1
-        assert values.ndim == 2
-        assert values.shape[1] == indices.size
-
-        unique_indices = np.unique(indices)
-        summed_values = np.empty((values.shape[0], unique_indices.size))
-
-        for i, index in enumerate(unique_indices):
-            summed_values[:, i] = np.sum(values[:, indices == index], axis=1)
-
-        return unique_indices, summed_values
 
     def generate_distances(self, n_stars):
         '''
@@ -75,8 +81,9 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         # Compute flux spectrum recieved from each star
         spectral_fluxes = physics_utils.BlackbodyStars(self.wavelengths, distances, temperatures, luminosities).compute_recieved_spectral_fluxes()
 
-        # Handle multiple stars in the same grid cells by summing the spectral fluxes at with the same indices
-        star_indices, spectral_fluxes = self.combine_duplicate_indices(star_indices, spectral_fluxes)
+        if self.combine_overlapping_stars:
+            # Handle multiple stars in the same grid cells by summing the spectral fluxes with the same indices
+            star_indices, spectral_fluxes = sum_overlapping_values(star_indices, spectral_fluxes)
 
         star_field = np.zeros((self.n_wavelengths, total_number_of_grid_cells), dtype=self.dtype)
         star_field[:, star_indices] = spectral_fluxes
