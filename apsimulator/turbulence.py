@@ -89,14 +89,21 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
     Class for convolving the image field with the long-exposure point spread function for
     the Kolmogorov turbulence model.
     '''
-    def __init__(self, reference_fried_parameter, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0, reduced_psf_span=None):
+    def __init__(self, reference_fried_parameter, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0, minimum_psf_extent=None):
 
-        self.reduced_psf_span = None if reduced_psf_span is None else float(reduced_psf_span)
+        self.minimum_psf_extent = None if minimum_psf_extent is None else float(minimum_psf_extent)
 
         super().__init__(reference_fried_parameter,
                          reference_wavelength=reference_wavelength,
                          reference_zenith_angle=reference_zenith_angle,
                          zenith_angle=zenith_angle)
+
+    def determine_optimal_psf_size(self):
+        minimum_angular_width = self.minimum_psf_extent*np.max(self.compute_approximate_time_averaged_FWHM(self.wavelengths))
+        minimum_width = 2*np.sin(minimum_angular_width/2)
+        minimum_size = minimum_width/min(self.grid.cell_extent_x, self.grid.cell_extent_y)
+        size = math_utils.nearest_higher_power_of_2(minimum_size)
+        return min(size, min(self.grid.size_x, self.grid.size_y))
 
     def compute_point_spread_function(self):
 
@@ -110,12 +117,12 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
         point_spread_function /= np.sum(point_spread_function, axis=(1,2))[:, np.newaxis, np.newaxis]
 
         # Trim edges to reduce the size of the PSF array, by only keeping a central region covering the given number of FWHMs
-        if self.reduced_psf_span is not None:
-            psf_window_angular_halfwidth = self.reduced_psf_span*np.max(self.compute_approximate_time_averaged_FWHM(self.wavelengths))
-            psf_window_halfwidth = math_utils.direction_vector_extent_from_polar_angle(psf_window_angular_halfwidth)
-            x_index_range, y_index_range = self.grid.find_index_ranges((-psf_window_halfwidth, psf_window_halfwidth), (-psf_window_halfwidth, psf_window_halfwidth))
-            if x_index_range[0] > 0 and y_index_range[0] > 0:
-                point_spread_function = point_spread_function[:, y_index_range[0]-1:y_index_range[1], x_index_range[0]-1:x_index_range[1]]
+        if self.minimum_psf_extent is not None:
+            psf_size = self.determine_optimal_psf_size()
+            print(point_spread_function.shape, psf_size)
+            x_index_range = (self.grid.size_x//2 - psf_size//2, self.grid.size_x//2 + psf_size//2)
+            y_index_range = (self.grid.size_y//2 - psf_size//2, self.grid.size_y//2 + psf_size//2)
+            point_spread_function = point_spread_function[:, y_index_range[0]:y_index_range[1], x_index_range[0]:x_index_range[1]]
 
         return point_spread_function
 
