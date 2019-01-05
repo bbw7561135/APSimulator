@@ -30,12 +30,8 @@ class ImagingSystem:
 
         self.has_imager = False
         self.has_aperture = False
-        self.has_filters = False
+        self.has_camera = False
         self.has_filtered_image_field = False
-
-    def initialize_fields(self):
-        self.initialize_source_field()
-        self.initialize_aperture_field()
 
     def set_imager(self, imager):
         self.imager = imager
@@ -47,9 +43,23 @@ class ImagingSystem:
         self.add_aperture_modulator('aperture', aperture)
         self.has_aperture = True
 
-    def set_filter_set(self, filter_set):
-        self.filter_set = filter_set
-        self.has_filters = True
+    def set_camera(self, camera):
+        self.camera = camera
+        self.has_camera = True
+
+    def add_source(self, label, source, store_field=False):
+        self.source_pipeline.add_field_processor(label, source, store_process_field_if_possible=store_field)
+
+    def add_aperture_modulator(self, label, aperture_modulator, store_field=False):
+        self.aperture_modulation_pipeline.add_field_processor(label, aperture_modulator, store_process_field_if_possible=store_field)
+
+    def add_image_postprocessor(self, label, image_postprocessor):
+        assert self.has_imager
+        self.image_postprocessing_pipeline.add_field_processor(label, image_postprocessor)
+
+    def initialize_fields(self):
+        self.initialize_source_field()
+        self.initialize_aperture_field()
 
     def initialize_source_field(self):
         '''
@@ -130,16 +140,6 @@ class ImagingSystem:
 
         self.image_postprocessing_pipeline = field_processing.FieldProcessingPipeline(self.imager.get_image_field().create_window_field(copy_values=False))
 
-    def add_source(self, label, source, store_field=False):
-        self.source_pipeline.add_field_processor(label, source, store_process_field_if_possible=store_field)
-
-    def add_aperture_modulator(self, label, aperture_modulator, store_field=False):
-        self.aperture_modulation_pipeline.add_field_processor(label, aperture_modulator, store_process_field_if_possible=store_field)
-
-    def add_image_postprocessor(self, label, image_postprocessor):
-        assert self.has_imager
-        self.image_postprocessing_pipeline.add_field_processor(label, image_postprocessor)
-
     def run_full_propagation(self):
         self.compute_source_field()
         self.compute_aperture_field()
@@ -182,23 +182,22 @@ class ImagingSystem:
         self.image_postprocessing_pipeline.compute_processed_field()
 
     def compute_filtered_image_field(self):
-        assert self.has_filters
-        self.filtered_image_field = self.filter_set.compute_filtered_image_field(self.get_postprocessed_image_field())
+        assert self.has_camera
+        self.filtered_image_field = self.camera.compute_filtered_image_field(self.get_postprocessed_image_field())
         self.has_filtered_image_field = True
 
-    def get_source(self, label):
-        return self.source_pipeline.get(label)
-
-    def get_aperture_modulator(self, label):
-        return self.aperture_modulation_pipeline.get(label)
-
-    def get_imager(self):
+    def compute_rayleigh_limit(self, wavelength):
         assert self.has_imager
-        return self.imager
+        return 1.22*wavelength/self.imager.get_aperture_diameter()
 
-    def get_aperture(self):
-        assert self.has_aperture
-        return self.aperture_modulation_pipeline.get('aperture')
+    def compute_spectral_powers_of_aperture_field(self, aperture_field):
+        return np.sum(math_utils.abs2(aperture_field.get_values_inside_window()), axis=(1, 2))*self.wavelengths**2*self.aperture_grid.get_cell_area()
+
+    def compute_incident_spectral_powers(self):
+        return self.compute_spectral_powers_of_aperture_field(self.compute_transmitted_aperture_field())
+
+    def compute_modulated_spectral_powers(self):
+        return self.compute_spectral_powers_of_aperture_field(self.get_modulated_aperture_field())
 
     def get_source_field(self):
         return self.source_pipeline.get_processed_field()
@@ -221,18 +220,23 @@ class ImagingSystem:
         assert self.has_filtered_image_field
         return self.filtered_image_field
 
-    def compute_rayleigh_limit(self, wavelength):
+    def get_source(self, label):
+        return self.source_pipeline.get(label)
+
+    def get_aperture_modulator(self, label):
+        return self.aperture_modulation_pipeline.get(label)
+
+    def get_imager(self):
         assert self.has_imager
-        return 1.22*wavelength/self.imager.get_aperture_diameter()
+        return self.imager
 
-    def compute_spectral_powers_of_aperture_field(self, aperture_field):
-        return np.sum(math_utils.abs2(aperture_field.get_values_inside_window()), axis=(1, 2))*self.wavelengths**2*self.aperture_grid.get_cell_area()
+    def get_aperture(self):
+        assert self.has_aperture
+        return self.aperture_modulation_pipeline.get('aperture')
 
-    def compute_incident_spectral_powers(self):
-        return self.compute_spectral_powers_of_aperture_field(self.compute_transmitted_aperture_field())
-
-    def compute_modulated_spectral_powers(self):
-        return self.compute_spectral_powers_of_aperture_field(self.get_modulated_aperture_field())
+    def get_camera(self):
+        assert self.has_camera
+        return self.camera
 
     def visualize_energy_conservation(self):
         assert self.has_imager
