@@ -13,7 +13,7 @@ class FraunhoferImager:
     thus produce a perfectly focused image. Out-of-focus effects, i.e. when the image plane and
     focal plane differ, require Fresnel diffraction.
     '''
-    def __init__(self, aperture_diameter, focal_length):
+    def __init__(self, aperture_diameter=1, focal_length=1):
         self.set_aperture_diameter(aperture_diameter) # The diameter of the aperture [m]
         self.set_focal_length(focal_length) # The distance from the aperture plane to the focal (and image) plane [m]
         self.has_image_field = False
@@ -23,16 +23,6 @@ class FraunhoferImager:
 
     def set_focal_length(self, focal_length):
         self.focal_length = float(focal_length)
-
-    def get_aperture_diameter(self):
-        return self.aperture_diameter
-
-    def get_focal_length(self):
-        return self.focal_length
-
-    def get_image_field(self):
-        assert self.has_image_field
-        return self.image_field
 
     def initialize_image_field(self, aperture_grid, wavelengths, field_of_view_x, field_of_view_y, use_memmap=False):
         '''
@@ -95,3 +85,13 @@ class FraunhoferImager:
     def compute_spectral_powers(self):
         assert self.has_image_field
         return self.compute_spectral_powers_of_image_field(self.image_field)
+
+    def get_image_field(self):
+        assert self.has_image_field
+        return self.image_field
+
+    def get_aperture_diameter(self):
+        return self.aperture_diameter
+
+    def get_focal_length(self):
+        return self.focal_length
