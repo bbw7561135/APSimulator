@@ -29,14 +29,24 @@ class KolmogorovTurbulence:
     Represents the Kolmogorov model of atmospheric seeing, where light passing through the
     atmosphere is phase shifted due to differences in refractive indices caused by turbulence.
     '''
-    def __init__(self, reference_fried_parameter, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0):
+    def __init__(self, reference_fried_parameter=0.1, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0):
 
         # The Fried parameter is the aperture diameter for which the RMS phase perturbation would be equal to 1 radian [m].
         # The given reference value applies to light with the given wavelength (fried_parameter_wavelength) for the given zenith angle
+        self.set_reference_fried_parameter(reference_fried_parameter, reference_wavelength, reference_zenith_angle, has_zenith_angle=False)
+        self.set_zenith_angle(zenith_angle) # Angle of view direction with respect to the zenith (straight up) [rad]
+
+    def set_reference_fried_parameter(self, reference_fried_parameter, reference_wavelength, reference_zenith_angle, has_zenith_angle=True):
         self.reference_fried_parameter = float(reference_fried_parameter)
         self.reference_wavelength = float(reference_wavelength) # Wavelength for which the given Fried parameter applies
         self.reference_zenith_angle = float(reference_zenith_angle)
-        self.zenith_angle = float(zenith_angle) # Angle of view direction with respect to the zenith (straight up) [rad]
+
+        if has_zenith_angle:
+            self.fried_parameter_at_zenith_angle = compute_zenith_angle_scaled_fried_parameter(self.reference_fried_parameter,
+                                                                                               self.reference_zenith_angle, self.zenith_angle)
+
+    def set_zenith_angle(self, zenith_angle):
+        self.zenith_angle = float(zenith_angle)
 
         self.fried_parameter_at_zenith_angle = compute_zenith_angle_scaled_fried_parameter(self.reference_fried_parameter,
                                                                                            self.reference_zenith_angle, self.zenith_angle)
@@ -83,20 +93,26 @@ class KolmogorovTurbulence:
                (constant_2/(1/constant_1 + theta_over_HW_squared)**beta_1 +
                 constant_4/(1/constant_3 + theta_over_HW_squared)**beta_2)
 
+    def get_zenith_angle(self):
+        return self.zenith_angle
+
 
 class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldProcessor):
     '''
     Class for convolving the image field with the long-exposure point spread function for
     the Kolmogorov turbulence model.
     '''
-    def __init__(self, reference_fried_parameter, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0, minimum_psf_extent=None):
+    def __init__(self, reference_fried_parameter=0.1, reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0, minimum_psf_extent=None):
 
-        self.minimum_psf_extent = None if minimum_psf_extent is None else float(minimum_psf_extent)
-
-        super().__init__(reference_fried_parameter,
+        super().__init__(reference_fried_parameter=reference_fried_parameter,
                          reference_wavelength=reference_wavelength,
                          reference_zenith_angle=reference_zenith_angle,
                          zenith_angle=zenith_angle)
+
+        self.set_minimum_psf_extent(minimum_psf_extent)
+
+    def set_minimum_psf_extent(self, minimum_psf_extent):
+        self.minimum_psf_extent = None if minimum_psf_extent is None else float(minimum_psf_extent)
 
     def determine_optimal_psf_size(self):
         minimum_angular_width = self.minimum_psf_extent*np.max(self.compute_approximate_time_averaged_FWHM(self.wavelengths))
@@ -141,17 +157,23 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
     Class for computing the phase perturbations of the incident light field across the telescope aperture
     due to turbulece in the atmosphere (seeing). The subharmonic method is based on Johansson & Gavel (1994).
     '''
-    def __init__(self, reference_fried_parameter,
+    def __init__(self, reference_fried_parameter=0.1,
                  reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0,
                  n_subharmonic_levels=0, outer_scale=np.inf):
 
-        super().__init__(reference_fried_parameter,
+        super().__init__(reference_fried_parameter=reference_fried_parameter,
                          reference_wavelength=reference_wavelength,
                          reference_zenith_angle=reference_zenith_angle,
                          zenith_angle=zenith_angle)
 
-        self.n_subharmonic_levels = int(n_subharmonic_levels) # Number of subharmonic grids to use for improving large-scale accuracy
-        self.outer_scale = float(outer_scale) # Largest size of the turbulent eddies [m]
+        self.set_n_subharmonic_levels(n_subharmonic_levels) # Number of subharmonic grids to use for improving large-scale accuracy
+        self.set_outer_scale(outer_scale) # Largest size of the turbulent eddies [m]
+
+    def set_n_subharmonic_levels(self, n_subharmonic_levels):
+        self.n_subharmonic_levels = int(n_subharmonic_levels)
+
+    def set_outer_scale(self, outer_scale):
+        self.outer_scale = float(outer_scale)
 
     def precompute_processing_quantities(self):
         '''
@@ -373,16 +395,19 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
     generated on demand and spliced together. The splicing method is based on Vorontsov et al. (2008).
     '''
 
-    def __init__(self, reference_fried_parameter, wind_speed,
+    def __init__(self, reference_fried_parameter=0.1, wind_speed=10,
                  reference_wavelength=500e-9, reference_zenith_angle=0, zenith_angle=0,
                  n_subharmonic_levels=0, outer_scale=np.inf):
 
-        super().__init__(reference_fried_parameter,
+        super().__init__(reference_fried_parameter=reference_fried_parameter,
                          reference_wavelength=reference_wavelength,
                          reference_zenith_angle=reference_zenith_angle,
                          zenith_angle=zenith_angle)
 
-        self.wind_speed = float(wind_speed) # Speed at which the phase screen moves across the aperture [m/s]
+        self.set_wind_speed(wind_speed) # Speed at which the phase screen moves across the aperture [m/s]
+
+    def set_wind_speed(self, wind_speed):
+        self.wind_speed = float(wind_speed)
 
     def precompute_processing_quantities(self):
         '''
@@ -476,3 +501,6 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
 
     def get_coherence_time(self):
         return self.coherence_time
+
+    def get_wind_speed(self):
+        return self.wind_speed
