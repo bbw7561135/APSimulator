@@ -8,7 +8,7 @@ import field_processing
 
 class CircularAperture(field_processing.MultiplicativeFieldProcessor):
 
-    def __init__(self, diameter, inner_diameter=0, spider_wane_width=0):
+    def __init__(self, diameter=1, inner_diameter=0, spider_wane_width=0):
         self.set_diameter(diameter) # Diameter of the aperture [m]
         self.set_inner_diameter(inner_diameter) # Diameter of the circular central obstruction [m]
         self.set_spider_wane_width(spider_wane_width) # Width of the horizontal and vertical spider wanes [m]
@@ -50,3 +50,12 @@ class CircularAperture(field_processing.MultiplicativeFieldProcessor):
         aperture shape.
         '''
         field.multiply_within_window(self.compute_blocking_mask())
+
+    def get_diameter(self):
+        return self.diameter
+
+    def get_inner_diameter(self):
+        return self.inner_diameter
+
+    def get_spider_wane_width(self):
+        return self.spider_wane_width
