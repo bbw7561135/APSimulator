@@ -61,14 +61,26 @@ class Regular2DGrid:
         '''
         self.window = IndexRange2D(0, self.size_x, 0, self.size_y)
 
-    def create_scaled_grid(self, scale, grid_type=None):
+    def define_window(self, x_coordinate_range, y_coordinate_range):
         '''
-        Returns a new grid with scaled extents. By default the grid type identifier is copied
-        to the new grid, but a new identifier can be specified by setting the grid_type argument.
+        Creates a new grid window corresponding to the given coordinate ranges.
         '''
-        return Regular2DGrid(self.size_x, self.size_y, self.extent_x*scale, self.extent_y*scale,
-                             shift_x=self.shift_x, shift_y=self.shift_y,
-                             grid_type=(self.grid_type if grid_type is None else grid_type))
+        x_index_range, y_index_range = self.find_index_ranges(x_coordinate_range, y_coordinate_range)
+        self.window = IndexRange2D(x_index_range[0], x_index_range[1],
+                                   y_index_range[0], y_index_range[1])
+
+    def compute_squared_distances(self):
+        return self.x_coordinate_mesh**2 + self.y_coordinate_mesh**2
+
+    def compute_squared_distances_within_window(self):
+        x_coordinate_mesh_within_window, y_coordinate_mesh_within_window = self.get_coordinate_meshes_within_window()
+        return x_coordinate_mesh_within_window**2 + y_coordinate_mesh_within_window**2
+
+    def compute_distances(self):
+        return np.sqrt(self.compute_squared_distances())
+
+    def compute_distances_within_window(self):
+        return np.sqrt(self.compute_squared_distances_within_window())
 
     def find_index_ranges(self, x_coordinate_range, y_coordinate_range):
         '''
@@ -81,13 +93,14 @@ class Regular2DGrid:
         y_index_range = np.searchsorted(self.y_coordinates, (y_coordinate_range[0], y_coordinate_range[1]))
         return x_index_range, y_index_range
 
-    def define_window(self, x_coordinate_range, y_coordinate_range):
+    def create_scaled_grid(self, scale, grid_type=None):
         '''
-        Creates a new grid window corresponding to the given coordinate ranges.
+        Returns a new grid with scaled extents. By default the grid type identifier is copied
+        to the new grid, but a new identifier can be specified by setting the grid_type argument.
         '''
-        x_index_range, y_index_range = self.find_index_ranges(x_coordinate_range, y_coordinate_range)
-        self.window = IndexRange2D(x_index_range[0], x_index_range[1],
-                                   y_index_range[0], y_index_range[1])
+        return Regular2DGrid(self.size_x, self.size_y, self.extent_x*scale, self.extent_y*scale,
+                             shift_x=self.shift_x, shift_y=self.shift_y,
+                             grid_type=(self.grid_type if grid_type is None else grid_type))
 
     def create_window_grid(self, grid_type=None):
         '''
@@ -138,19 +151,6 @@ class Regular2DGrid:
 
     def get_cell_area(self):
         return self.cell_extent_x*self.cell_extent_y
-
-    def compute_squared_distances(self):
-        return self.x_coordinate_mesh**2 + self.y_coordinate_mesh**2
-
-    def compute_squared_distances_within_window(self):
-        x_coordinate_mesh_within_window, y_coordinate_mesh_within_window = self.get_coordinate_meshes_within_window()
-        return x_coordinate_mesh_within_window**2 + y_coordinate_mesh_within_window**2
-
-    def compute_distances(self):
-        return np.sqrt(self.compute_squared_distances())
-
-    def compute_distances_within_window(self):
-        return np.sqrt(self.compute_squared_distances_within_window())
 
 
 class FFTGrid(Regular2DGrid):
