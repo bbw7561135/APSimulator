@@ -29,14 +29,33 @@ def sum_overlapping_values(positions, values):
 class UniformStarField(field_processing.AdditiveFieldProcessor):
 
     def __init__(self, stellar_density, near_distance, far_distance, combine_overlapping_stars=False, seed=None):
-        self.stellar_density = float(stellar_density) # Average number of stars per volume [1/m^3]
-        self.near_distance = float(near_distance) # Distance to where the uniform star field begins [m]
-        self.far_distance = float(far_distance) # Distance to where the uniform star field ends [m]
-        self.combine_overlapping_stars = bool(combine_overlapping_stars) # Whether to sum the fluxes of stars generated at the same position
-        self.random_generator = np.random.RandomState(seed=seed)
+        self.set_stellar_density(stellar_density) # Average number of stars per volume [1/m^3]
+        self.set_near_distance(near_distance) # Distance to where the uniform star field begins [m]
+        self.set_far_distance(far_distance) # Distance to where the uniform star field ends [m]
+        self.set_combine_overlapping_stars(combine_overlapping_stars) # Whether to sum the fluxes of stars generated at the same position
+        self.set_seed(seed)
 
+    def set_stellar_density(self, stellar_density):
+        self.stellar_density = float(stellar_density)
+
+    def set_near_distance(self, near_distance):
+        self.near_distance = float(near_distance)
         self.near_distance_cubed = self.near_distance**3
+
+    def set_far_distance(self, far_distance):
+        self.far_distance = float(far_distance)
         self.far_distance_cubed = self.far_distance**3
+
+    def set_distance_range(self, near_distance, far_distance):
+        self.set_near_distance(near_distance)
+        self.set_far_distance(far_distance)
+
+    def set_combine_overlapping_stars(self, combine_overlapping_stars):
+        self.combine_overlapping_stars = bool(combine_overlapping_stars)
+
+    def set_seed(self, seed):
+        self.seed = None if seed is None else int(seed)
+        self.random_generator = np.random.RandomState(seed=self.seed)
 
     def compute_visible_star_field_volume(self, field_of_view_x, field_of_view_y):
         return (3/4)*np.tan(field_of_view_x/2)*np.tan(field_of_view_y/2)*(self.far_distance_cubed - self.near_distance_cubed)
@@ -97,3 +116,15 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         to the given field.
         '''
         field.add_within_window(self.generate_star_field())
+
+    def get_stellar_density(self):
+        return self.stellar_density
+
+    def get_near_distance(self):
+        return self.near_distance
+
+    def get_far_distance(self):
+        return self.far_distance
+
+    def get_distance_range(self):
+        return self.near_distance, self.far_distance
