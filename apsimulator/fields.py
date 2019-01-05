@@ -54,14 +54,6 @@ class Regular2DField:
                 # Initialize value array with constant number
                 self.values = np.full(self.shape, initial_value, dtype=self.dtype)
 
-    def get_window_view_of_array(self, values):
-        assert values.shape == self.shape
-        window = self.grid.window
-        return values[window.y.start:window.y.end, window.x.start:window.x.end]
-
-    def get_values_inside_window(self):
-        return self.get_window_view_of_array(self.values)
-
     def set_constant_value(self, constant_value):
         self.values[:] = float(constant_value)
 
@@ -73,6 +65,23 @@ class Regular2DField:
             self.values[:] = values
         else:
             self.values = values
+
+    def set_values_inside_window(self, values):
+        '''
+        Assigns the given array of values to the field values within the view window defined for
+        the grid. The shape of the input array can either correspond to the full grid shape or
+        just to the shape of the window (with the size of the wavelength axis being the same).
+        '''
+        assert isinstance(values, np.ndarray)
+        assert values.shape == self.shape or values.shape == self.window_shape
+        assert values.dtype == self.dtype
+
+        window_values = self.get_values_inside_window()
+
+        if values.shape == self.shape:
+            window_values[:] = self.get_window_view_of_array(values)
+        else:
+            window_values[:] = values
 
     def __iadd__(self, values):
         '''
@@ -91,23 +100,6 @@ class Regular2DField:
         self.values *= values
         self.dtype = self.values.dtype
         return self
-
-    def set_values_inside_window(self, values):
-        '''
-        Assigns the given array of values to the field values within the view window defined for
-        the grid. The shape of the input array can either correspond to the full grid shape or
-        just to the shape of the window (with the size of the wavelength axis being the same).
-        '''
-        assert isinstance(values, np.ndarray)
-        assert values.shape == self.shape or values.shape == self.window_shape
-        assert values.dtype == self.dtype
-
-        window_values = self.get_values_inside_window()
-
-        if values.shape == self.shape:
-            window_values[:] = self.get_window_view_of_array(values)
-        else:
-            window_values[:] = values
 
     def multiply_within_window(self, factors):
         '''
@@ -229,6 +221,14 @@ class Regular2DField:
                               use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
                               copy_initial_array=copy_values)
 
+    def get_window_view_of_array(self, values):
+        assert values.shape == self.shape
+        window = self.grid.window
+        return values[window.y.start:window.y.end, window.x.start:window.x.end]
+
+    def get_values_inside_window(self):
+        return self.get_window_view_of_array(self.values)
+
 
 class SpectralField(Regular2DField):
     '''
@@ -253,11 +253,6 @@ class SpectralField(Regular2DField):
         self.shape = (self.n_wavelengths, *self.grid.shape)
         self.window_shape = (self.n_wavelengths, *self.grid.window.shape)
 
-    def get_window_view_of_array(self, values):
-        assert values.shape == self.shape
-        window = self.grid.window
-        return values[:, window.y.start:window.y.end, window.x.start:window.x.end]
-
     def compute_fourier_transformed_values(self, inverse=False):
         '''
         Computes the 2D Fourier transform of the field values and returns the result as an array.
@@ -266,6 +261,11 @@ class SpectralField(Regular2DField):
         '''
         assert isinstance(self.grid, grids.FFTGrid)
         return parallel_utils.parallel_fft2(self.values, centered=self.grid.is_centered, inverse=inverse)
+
+    def get_window_view_of_array(self, values):
+        assert values.shape == self.shape
+        window = self.grid.window
+        return values[:, window.y.start:window.y.end, window.x.start:window.x.end]
 
 
 class FilteredSpectralField(SpectralField):
