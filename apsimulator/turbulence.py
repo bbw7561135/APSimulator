@@ -135,7 +135,6 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
         # Trim edges to reduce the size of the PSF array, by only keeping a central region covering the given number of FWHMs
         if self.minimum_psf_extent is not None:
             psf_size = self.determine_optimal_psf_size()
-            print(point_spread_function.shape, psf_size)
             x_index_range = (self.grid.size_x//2 - psf_size//2, self.grid.size_x//2 + psf_size//2)
             y_index_range = (self.grid.size_y//2 - psf_size//2, self.grid.size_y//2 + psf_size//2)
             point_spread_function = point_spread_function[:, y_index_range[0]:y_index_range[1], x_index_range[0]:x_index_range[1]]
