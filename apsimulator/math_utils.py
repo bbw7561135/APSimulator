@@ -10,12 +10,68 @@ def abs2(x):
     return x.real**2 + x.imag**2
 
 
+@numba.jit
+def is_sorted(array):
+    for i in range(len(array)-1):
+        if array[i+1] < array[i] :
+            return False
+    return True
+
+
+def linear_extrapolation(new_x_values, x_values, y_values, side='left'):
+    assert side in ('left', 'right')
+    left_idx = 0 if side == 'left' else -2
+    right_idx = left_idx + 1
+    slope = (edge_y_values[right_idx] - edge_y_values[left_idx])/(edge_x_values[right_idx] - edge_x_values[left_idx])
+    return edge_y_values[left_idx] + slope*(new_x_values - edge_x_values[left_idx])
+
+
+def interp_extrap_scalar(new_x_value, x_values, y_values):
+    if new_x_value < x_values[0]:
+        new_y_value = linear_extrapolation(new_x_value, x_values, y_values, side='left')
+    elif new_x_value > x_values[-1]:
+        new_y_value = linear_extrapolation(new_x_value, x_values, y_values, side='right')
+    else:
+        new_y_value = np.interp(new_x_value, x_values, y_values)
+    return new_y_value
+
+
+def interp_extrap_array(new_x_values, x_values, y_values):
+    new_y_values = np.interp(new_x_values, x_values, y_values)
+    new_y_values[new_x_values < x_values[0]] = linear_extrapolation(new_x_values[new_x_values < x_values[0]], x_values, y_values, side='left')
+    new_y_values[new_x_values > x_values[-1]] = linear_extrapolation(new_x_values[new_x_values > x_values[-1]], x_values, y_values, side='right')
+    return new_y_values
+
+
+def interp_extrap(new_x_values, x_values, y_values):
+    if isinstance(new_x_values, np.ndarray):
+        return interp_extrap_array(new_x_values, x_values, y_values)
+    else:
+        return interp_extrap_scalar(new_x_values, x_values, y_values)
+
+
+def meters_from_parsecs(parsecs):
+    return 3.0857e16*parsecs
+
+
+def inverse_cubic_meters_from_inverse_cubic_parsecs(inverse_cubic_parsecs):
+    return 3.404e-50*inverse_cubic_parsecs
+
+
 def arcsec_from_radian(angle):
     return angle*206264.806
 
 
 def radian_from_arcsec(angle):
     return angle*4.84813681e-6
+
+
+def square_arcsec_from_steradians(steradians):
+    return 4.255e10*steradians
+
+
+def steradians_from_square_arcsec(square_arcsec):
+    return 2.350e-11*square_arcsec
 
 
 def is_power_of_two(number):
