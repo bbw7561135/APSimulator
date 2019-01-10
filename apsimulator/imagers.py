@@ -86,6 +86,10 @@ class FraunhoferImager:
         assert self.has_image_field
         return self.compute_spectral_powers_of_image_field(self.image_field)
 
+    def get_physical_image_grid_cell_extents(self):
+        assert self.has_image_field
+        return self.focal_length*self.image_grid.cell_extent_x, self.focal_length*self.image_grid.cell_extent_y
+
     def get_image_field(self):
         assert self.has_image_field
         return self.image_field
