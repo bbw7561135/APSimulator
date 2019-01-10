@@ -108,9 +108,9 @@ class Regular2DGrid:
         the grid window.
         '''
         window_extent_x, window_extent_y = self.get_window_extents()
+        window_shift_x, window_shift_y = self.get_window_shifts()
         return Regular2DGrid(self.window.size_x, self.window.size_y, window_extent_x, window_extent_y,
-                             shift_x=self.shift_x - (self.size_x - self.window.size_x)//2,
-                             shift_y=self.shift_y - (self.size_y - self.window.size_y)//2,
+                             shift_x=window_shift_x, shift_y=window_shift_y,
                              grid_type=(self.grid_type if grid_type is None else grid_type))
 
     def get_bounds(self, x_index_range=(0, -1), y_index_range=(0, -1)):
@@ -151,6 +151,14 @@ class Regular2DGrid:
 
     def get_cell_area(self):
         return self.cell_extent_x*self.cell_extent_y
+
+    def get_window_area(self):
+        return self.get_cell_area()*self.get_total_window_size()
+
+    def get_window_shifts(self):
+        window_shift_x = self.shift_x - (self.size_x - self.window.size_x + 1)//2
+        window_shift_y = self.shift_y - (self.size_y - self.window.size_y + 1)//2
+        return window_shift_x, window_shift_y
 
 
 class FFTGrid(Regular2DGrid):
