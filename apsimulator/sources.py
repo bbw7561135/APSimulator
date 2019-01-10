@@ -2,7 +2,9 @@
 # This file is part of the APSimulator API.
 # Author: Lars Frogner
 import numpy as np
+import matplotlib.pyplot as plt
 import fields
+import filters
 import field_processing
 import math_utils
 import physics_utils
@@ -63,6 +65,20 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
     def compute_average_number_of_visible_stars(self, field_of_view_x, field_of_view_y):
         return self.stellar_density*self.compute_visible_star_field_volume(field_of_view_x, field_of_view_y)
 
+    def generate_star_count(self):
+
+        extent_x, extent_y = self.grid.get_window_extents()
+
+        field_of_view_x = math_utils.polar_angle_from_direction_vector_extent(extent_x)
+        field_of_view_y = math_utils.polar_angle_from_direction_vector_extent(extent_y)
+
+        average_number_of_visible_stars = self.compute_average_number_of_visible_stars(field_of_view_x, field_of_view_y)
+
+        # Draw number of stars to generate from a Poisson distribution
+        n_stars = self.random_generator.poisson(lam=average_number_of_visible_stars)
+
+        return n_stars
+
     def generate_distances(self, n_stars):
         '''
         Samples distances to the stars using that the probability of finding
@@ -77,28 +93,29 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
     def generate_luminosities(self, n_stars):
         return np.full(n_stars, physics_utils.solar_luminosity)
 
-    def generate_star_field(self):
-
-        total_number_of_grid_cells = self.grid.get_total_window_size()
-        extent_x, extent_y = self.grid.get_window_extents()
-
-        field_of_view_x = math_utils.polar_angle_from_direction_vector_extent(extent_x)
-        field_of_view_y = math_utils.polar_angle_from_direction_vector_extent(extent_y)
-
-        average_number_of_visible_stars = self.compute_average_number_of_visible_stars(field_of_view_x, field_of_view_y)
-
-        # Draw number of stars to generate from a Poisson distribution
-        n_stars = self.random_generator.poisson(lam=average_number_of_visible_stars)
-
-        # Generate 1D index into the image array for each star, using a uniform distribution
-        star_indices = self.random_generator.randint(low=0, high=total_number_of_grid_cells, size=n_stars)
+    def generate_stars(self, n_stars):
 
         distances = self.generate_distances(n_stars)
         temperatures = self.generate_temperatures(n_stars)
         luminosities = self.generate_luminosities(n_stars)
 
+        stars = physics_utils.BlackbodyStars(self.wavelengths, distances, temperatures, luminosities)
+
+        return stars
+
+    def generate_star_field(self):
+
+        n_stars = self.generate_star_count()
+
+        total_number_of_grid_cells = self.grid.get_total_window_size()
+
+        # Generate 1D index into the image array for each star, using a uniform distribution
+        star_indices = self.random_generator.randint(low=0, high=total_number_of_grid_cells, size=n_stars)
+
+        stars = self.generate_stars(n_stars)
+
         # Compute flux spectrum recieved from each star
-        spectral_fluxes = physics_utils.BlackbodyStars(self.wavelengths, distances, temperatures, luminosities).compute_recieved_spectral_fluxes()
+        spectral_fluxes = stars.compute_recieved_spectral_fluxes()
 
         if self.combine_overlapping_stars:
             # Handle multiple stars in the same grid cells by summing the spectral fluxes with the same indices
@@ -117,6 +134,22 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         '''
         field.add_within_window(self.generate_star_field())
 
+    def plot_HR_diagram(self, absolute=False, output_path=False):
+        stars = self.generate_stars(self.generate_star_count())
+        spectral_fluxes = stars.compute_emitted_spectral_fluxes() if absolute else stars.compute_recieved_spectral_fluxes()
+        V_band_filter = filters.get_V_band_filter()
+        V_band_fluxes = V_band_filter.compute_integrated_flux(self.wavelengths, spectral_fluxes)
+        V_band_magnitudes = physics_utils.V_band_magnitude_from_flux(V_band_fluxes)
+
+        fig, ax = plt.subplots()
+        ax.scatter(stars.temperatures, V_band_magnitudes, c='b', s=0.01, alpha=0.5)
+        ax.set_xlabel('Temperature [K]')
+        ax.set_ylabel('{} visual magnitude'.format('Absolute' if absolute else 'Apparent'))
+        if output_path:
+            plt.savefig(output_path)
+        else:
+            plt.show()
+
     def get_stellar_density(self):
         return self.stellar_density
 
@@ -128,3 +161,74 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
 
     def get_distance_range(self):
         return self.near_distance, self.far_distance
+
+
+class MoonSkyglow(field_processing.AdditiveFieldProcessor):
+
+    def __init__(self, illumination_percentage, relative_polar_angle):
+        self.illumination_percentage = float(illumination_percentage)
+        self.relative_polar_angle = float(relative_polar_angle)
+
+    def process(self, field):
+        '''
+        Implements the FieldProcessor method for adding the moon skyglow field
+        to the given field.
+        '''
+        field.add_within_window(self.generate_skyglow())
+
+
+class UniformBlackbodySkyglow(field_processing.AdditiveFieldProcessor):
+
+    def __init__(self, bortle_class=3, color_temperature=5000):
+        self.set_bortle_class(bortle_class)
+        self.set_color_temperature(color_temperature)
+
+    def set_bortle_class(self, bortle_class):
+        self.bortle_class = float(bortle_class)
+
+    def set_color_temperature(self, color_temperature):
+        self.color_temperature = float(color_temperature)
+
+    def generate_skyglow(self):
+
+        # Estimate the solid angle of the field of view
+        extent_x, extent_y = self.grid.get_window_extents()
+        field_of_view_x = math_utils.polar_angle_from_direction_vector_extent(extent_x)
+        field_of_view_y = math_utils.polar_angle_from_direction_vector_extent(extent_y)
+        field_of_view_solid_angle = field_of_view_x*field_of_view_y
+
+        # Model spectral flux distribution of the skyglow as a blackbody spectrum of the specified temperature
+        spectral_fluxes = physics_utils.compute_blackbody_spectral_fluxes(self.wavelengths, self.color_temperature)
+
+        # Compute the total flux in the visual band that the skyglow should produce
+        target_V_band_magnitude = physics_utils.V_band_magnitude_from_bortle_class(self.bortle_class, field_of_view_solid_angle)
+        target_V_band_flux = physics_utils.V_band_flux_from_magnitude(target_V_band_magnitude)
+
+        # Compute the scale for the spectral flux values that will produce the wanted visual band flux
+        V_band_filter = filters.get_V_band_filter()
+        integrated_V_band_spectral_flux = V_band_filter.compute_integrated_flux(self.wavelengths, spectral_fluxes)
+        flux_scale = target_V_band_flux/integrated_V_band_spectral_flux
+
+        # Divide the fluxes by the total number of grid cells so that summing the flux over all grid cells
+        # yields the correct total flux
+        flux_scale /= self.grid.get_total_window_size()
+
+        spectral_fluxes *= flux_scale
+
+        return spectral_fluxes
+
+    def process(self, field):
+        '''
+        Implements the FieldProcessor method for adding the skyglow source field
+        to the given field.
+        '''
+        field += self.generate_skyglow()[:, np.newaxis, np.newaxis]
+
+    def apply_process_field(self, field, process_field):
+        field += process_field.values
+
+    def get_bortle_class(self):
+        return self.bortle_class
+
+    def get_color_temperature(self):
+        return self.color_temperature
