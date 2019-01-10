@@ -59,3 +59,6 @@ class CircularAperture(field_processing.MultiplicativeFieldProcessor):
 
     def get_spider_wane_width(self):
         return self.spider_wane_width
+
+    def get_area(self):
+        return np.pi*(self.squared_radius - self.squared_inner_radius) - 2*(self.diameter - self.inner_diameter)*self.spider_wane_width
