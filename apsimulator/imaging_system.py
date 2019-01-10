@@ -31,7 +31,6 @@ class ImagingSystem:
         self.has_imager = False
         self.has_aperture = False
         self.has_camera = False
-        self.has_filtered_image_field = False
 
     def set_imager(self, imager):
         self.imager = imager
@@ -65,8 +64,10 @@ class ImagingSystem:
         '''
         Constructs the grid for the source field and initializes the field.
 
-        The source field is the angular and spectral distribution of amplitudes
-        of the light field incident on the aperture, and has units of sqrt(W/m^2/m).
+        The source field is the angular and spectral distribution of flux
+        of the light field incident on the aperture, and has units of W/m^2/m.
+        Each value in the source field is assumed to already be integrated over the
+        solid angle subtended by its grid cell.
 
         The source field grid is defined in terms of the x- and y-components of
         the unit direction vector from the center of the aperture to the source.
@@ -146,29 +147,32 @@ class ImagingSystem:
         self.compute_modulated_aperture_field()
         self.compute_image_field()
         self.compute_postprocessed_image_field()
-        self.compute_filtered_image_field()
+        self.compute_camera_signal_field()
+
+    def capture_exposure(self, exposure_time):
+        self.camera.compute_captured_signal_field(exposure_time, use_memmap=self.use_memmaps)
 
     def compute_source_field(self):
         self.source_pipeline.compute_processed_field()
 
     def compute_aperture_field(self):
         '''
-        Computes the aperture field by taking the Fourier transform of the source field.
-        This corresponds to summing up the plane waves incident on the aperture plane
-        from each direction in the source grid. The plane waves are assumed to have no
-        initial phase difference, and the high-frequency temporal phase shifts due to the
-        oscillations of the electromagnetic field are neglected (since these will average
-        out over a very short time).
+        Computes the aperture field by taking the Fourier transform of the square root
+        of the source field. This corresponds to summing up the plane waves incident on
+        the aperture plane from each direction in the source grid. The plane waves are
+        assumed to have no initial phase difference, and the high-frequency temporal phase
+        shifts due to the oscillations of the electromagnetic field are neglected (since
+        these will average out over a very short time).
         '''
-        total_source_field = self.get_source_field()
-        self.aperture_field.set_values_inside_window(total_source_field.compute_fourier_transformed_values())
+        total_source_amplitude_field = self.get_source_field().with_function_applied(np.sqrt)
+        self.aperture_field.set_values_inside_window(total_source_amplitude_field.compute_fourier_transformed_values())
 
     def compute_modulated_aperture_field(self):
         self.aperture_modulation_pipeline.compute_processed_field()
 
     def compute_transmitted_aperture_field(self):
         assert self.has_aperture
-        aperture = self.aperture_modulation_pipeline.get_processor('aperture')
+        aperture = self.get_aperture()
         transmitted_aperture_field = self.get_aperture_field().copy()
         aperture.process(transmitted_aperture_field)
         return transmitted_aperture_field
@@ -181,19 +185,26 @@ class ImagingSystem:
         assert self.has_imager
         self.image_postprocessing_pipeline.compute_processed_field()
 
-    def compute_filtered_image_field(self):
+    def compute_camera_signal_field(self):
         assert self.has_camera
-        self.filtered_image_field = self.camera.compute_filtered_image_field(self.get_postprocessed_image_field())
-        self.has_filtered_image_field = True
+        self.camera.compute_signal_field(self.get_postprocessed_image_field(), use_memmap=self.use_memmaps)
+        self.camera.set_pixel_extents(*self.imager.get_physical_image_grid_cell_extents())
 
     def compute_rayleigh_limit(self, wavelength):
         assert self.has_imager
         return 1.22*wavelength/self.imager.get_aperture_diameter()
 
+    def compute_source_spectral_powers(self):
+        raise NotImplementedError
+        return np.sum(self.get_source_field().get_values_inside_window(), axis=(1,2))*self.get_aperture().get_area()
+
     def compute_spectral_powers_of_aperture_field(self, aperture_field):
         return np.sum(math_utils.abs2(aperture_field.get_values_inside_window()), axis=(1, 2))*self.wavelengths**2*self.aperture_grid.get_cell_area()
 
     def compute_incident_spectral_powers(self):
+        return self.compute_spectral_powers_of_aperture_field(self.get_aperture_field())
+
+    def compute_transmitted_spectral_powers(self):
         return self.compute_spectral_powers_of_aperture_field(self.compute_transmitted_aperture_field())
 
     def compute_modulated_spectral_powers(self):
@@ -216,15 +227,15 @@ class ImagingSystem:
         assert self.has_imager
         return self.image_postprocessing_pipeline.get_processed_field()
 
-    def get_filtered_image_field(self):
-        assert self.has_filtered_image_field
-        return self.filtered_image_field
+    def get_camera_signal_field(self):
+        assert self.has_camera
+        return self.camera.get_signal_field()
 
     def get_source(self, label):
-        return self.source_pipeline.get(label)
+        return self.source_pipeline.get_processor(label)
 
     def get_aperture_modulator(self, label):
-        return self.aperture_modulation_pipeline.get(label)
+        return self.aperture_modulation_pipeline.get_processor(label)
 
     def get_imager(self):
         assert self.has_imager
@@ -232,7 +243,7 @@ class ImagingSystem:
 
     def get_aperture(self):
         assert self.has_aperture
-        return self.aperture_modulation_pipeline.get('aperture')
+        return self.aperture_modulation_pipeline.get_processor('aperture')
 
     def get_camera(self):
         assert self.has_camera
@@ -240,19 +251,25 @@ class ImagingSystem:
 
     def visualize_energy_conservation(self):
         assert self.has_imager
-        incident_spectral_powers = self.compute_incident_spectral_powers()
+        #source_spectral_powers = self.compute_source_spectral_powers()
+        #incident_spectral_powers = self.compute_incident_spectral_powers()
+        transmitted_spectral_powers = self.compute_transmitted_spectral_powers()
         modulated_spectral_powers = self.compute_modulated_spectral_powers()
         image_spectral_powers = self.imager.compute_spectral_powers()
         postprocessed_image_spectral_powers = self.imager.compute_spectral_powers_of_image_field(self.get_postprocessed_image_field())
 
-        incident_power = np.trapz(incident_spectral_powers, x=self.wavelengths)
+        #source_power = np.trapz(source_spectral_powers, x=self.wavelengths)
+        #incident_power = np.trapz(incident_spectral_powers, x=self.wavelengths)
+        transmitted_power = np.trapz(transmitted_spectral_powers, x=self.wavelengths)
         modulated_power = np.trapz(modulated_spectral_powers, x=self.wavelengths)
         image_power = np.trapz(image_spectral_powers, x=self.wavelengths)
         postprocessed_image_power = np.trapz(postprocessed_image_spectral_powers, x=self.wavelengths)
 
         fig, ax = plt.subplots()
         alpha = 1
-        ax.plot(self.wavelengths, incident_spectral_powers, '-', alpha=alpha, label='Incident ({:g} W total)'.format(incident_power))
+        #ax.plot(self.wavelengths, source_spectral_powers, '.', alpha=alpha, label='Source ({:g} W total)'.format(source_power))
+        #ax.plot(self.wavelengths, incident_spectral_powers, '-', alpha=alpha, label='Incident ({:g} W total)'.format(incident_power))
+        ax.plot(self.wavelengths, transmitted_spectral_powers, '*', alpha=alpha, label='Transmitted ({:g} W total)'.format(transmitted_power))
         ax.plot(self.wavelengths, modulated_spectral_powers, '--', alpha=alpha, label='Modulated ({:g} W total)'.format(modulated_power))
         ax.plot(self.wavelengths, image_spectral_powers, ':', alpha=alpha, label='Image ({:g} W total)'.format(image_power))
         ax.plot(self.wavelengths, postprocessed_image_spectral_powers, '-.', alpha=alpha, label='Postprocessed image ({:g} W total)'.format(postprocessed_image_power))
@@ -283,5 +300,9 @@ class ImagingSystem:
     def visualize_postprocessed_image_field(self, **plot_kwargs):
         fields.visualize_field(self.get_postprocessed_image_field(), **plot_kwargs)
 
-    def visualize_filtered_image_field(self, **plot_kwargs):
-        fields.visualize_field(self.get_filtered_image_field(), **plot_kwargs)
+    def visualize_camera_signal_field(self, **plot_kwargs):
+        fields.visualize_field(self.get_camera_signal_field(), **plot_kwargs)
+
+    def visualize_captured_camera_signal_field(self, **plot_kwargs):
+        fields.visualize_field(self.camera.get_captured_signal_field(), **plot_kwargs)
+
