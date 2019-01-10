@@ -33,12 +33,13 @@ class Regular2DField:
 
     def initialize_values(self, initial_value):
 
+        has_initial_value = initial_value is not None
         inital_value_is_array = isinstance(initial_value, np.ndarray)
 
         if inital_value_is_array:
             assert initial_value.shape == self.shape
             self.dtype = initial_value.dtype # Change the data type to that of the initial array
-        else:
+        elif has_initial_value:
             initial_value = float(initial_value)
 
         if self.use_memmap and not (inital_value_is_array and not self.copy_initial_array):
@@ -46,13 +47,16 @@ class Regular2DField:
             # It will automatically be deleted when the memmap object goes out of scope.
             with tempfile.NamedTemporaryFile() as temporary_file:
                 self.values = np.memmap(temporary_file, shape=self.shape, dtype=self.dtype, mode='w+')
-            self.values[:] = initial_value
+            if has_initial_value:
+                self.values[:] = initial_value
         else:
             if inital_value_is_array:
                 self.values = initial_value.copy() if self.copy_initial_array else initial_value
-            else:
+            elif has_initial_value:
                 # Initialize value array with constant number
                 self.values = np.full(self.shape, initial_value, dtype=self.dtype)
+            else:
+                self.values = np.empty(self.shape, dtype=self.dtype)
 
     def set_constant_value(self, constant_value):
         self.values[:] = float(constant_value)
@@ -60,11 +64,12 @@ class Regular2DField:
     def set_values(self, values, copy=True):
         assert isinstance(values, np.ndarray)
         assert values.shape == self.shape
-        assert values.dtype == self.dtype
         if copy:
+            assert values.dtype == self.dtype
             self.values[:] = values
         else:
             self.values = values
+            self.dtype = values.dtype
 
     def set_values_inside_window(self, values):
         '''
@@ -87,7 +92,6 @@ class Regular2DField:
         '''
         Implements the += operator.
         '''
-        assert values.shape == self.shape
         self.values += values
         self.dtype = self.values.dtype
         return self
@@ -96,10 +100,15 @@ class Regular2DField:
         '''
         Implements the *= operator.
         '''
-        assert values.shape == self.shape
         self.values *= values
         self.dtype = self.values.dtype
         return self
+
+    def apply_function(self, function):
+        self.values[:] = function(self.values)
+        assert isinstance(self.values, np.ndarray) and \
+               self.values.shape == self.shape and \
+               self.values.dtype == self.dtype
 
     def multiply_within_window(self, factors):
         '''
@@ -133,6 +142,14 @@ class Regular2DField:
         else:
             window_values[:] += offsets
 
+    def apply_function_within_window(self, function):
+        window_values = self.get_values_inside_window()
+        new_window_values = function(window_values)
+        assert isinstance(new_window_values, np.ndarray) and \
+               new_window_values.shape == self.window_shape and \
+               new_window_values.dtype == self.dtype
+        window_values[:] = new_window_values
+
     def copy(self, use_memmap=None):
         return self.__class__(*self.create_constructor_argument_list(),
                               initial_value=self.values,
@@ -140,16 +157,14 @@ class Regular2DField:
                               copy_initial_array=True)
 
     def multiplied(self, factors, use_memmap=None):
-        assert isinstance(factors, np.ndarray)
-        assert factors.shape == self.shape
+        assert isinstance(factors, (int, float, complex)) or (isinstance(factors, np.ndarray) and factors.shape == self.shape)
         return self.__class__(*self.create_constructor_argument_list(),
                               initial_value=self.values*factors,
                               use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
                               copy_initial_array=False)
 
     def added(self, offsets, use_memmap=None):
-        assert isinstance(offsets, np.ndarray)
-        assert offsets.shape == self.shape
+        assert isinstance(offsets, (int, float, complex)) or (isinstance(offsets, np.ndarray) and offsets.shape == self.shape)
         return self.__class__(*self.create_constructor_argument_list(),
                               initial_value=(self.values + offsets),
                               use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
@@ -164,6 +179,17 @@ class Regular2DField:
         offset_field = self.copy(use_memmap=use_memmap)
         offset_field.add_within_window(offsets)
         return offset_field
+
+    def with_function_applied_within_window(self, function, use_memmap=None):
+        new_field = self.copy(use_memmap=use_memmap)
+        new_field.apply_function_within_window(function)
+        return new_field
+
+    def with_function_applied(self, function, use_memmap=None):
+        return self.__class__(*self.create_constructor_argument_list(),
+                              initial_value=function(self.values),
+                              use_memmap=(self.use_memmap if use_memmap is None else use_memmap),
+                              copy_initial_array=False)
 
     def compute_fourier_transformed_values(self, inverse=False):
         '''
@@ -252,6 +278,13 @@ class SpectralField(Regular2DField):
         '''
         self.shape = (self.n_wavelengths, *self.grid.shape)
         self.window_shape = (self.n_wavelengths, *self.grid.window.shape)
+
+    def add_within_window(self, offsets):
+        if isinstance(offsets, np.ndarray) and offsets.ndim == 1 and offsets.size == self.n_wavelengths:
+            window_values = self.get_values_inside_window()
+            window_values[:] += offsets[:, np.newaxis, np.newaxis]
+        else:
+            super().add_within_window(offsets)
 
     def compute_fourier_transformed_values(self, inverse=False):
         '''
