@@ -2,7 +2,6 @@
 # This file is part of the APSimulator API.
 # Author: Lars Frogner
 import numpy as np
-import matplotlib.pyplot as plt
 import fields
 import filters
 import field_processing
@@ -75,44 +74,43 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         average_number_of_visible_stars = self.compute_average_number_of_visible_stars(field_of_view_x, field_of_view_y)
 
         # Draw number of stars to generate from a Poisson distribution
-        n_stars = self.random_generator.poisson(lam=average_number_of_visible_stars)
+        number_of_stars = self.random_generator.poisson(lam=average_number_of_visible_stars)
 
-        return n_stars
+        return number_of_stars
 
-    def generate_distances(self, n_stars):
+    def generate_distances(self, number_of_stars):
         '''
         Samples distances to the stars using that the probability of finding
         a distance r is proportional to r^2.
         '''
-        random_fractions = self.random_generator.random_sample(size=n_stars)
+        random_fractions = self.random_generator.random_sample(size=number_of_stars)
         return np.cbrt((self.far_distance_cubed - self.near_distance_cubed)*random_fractions + self.near_distance_cubed)
 
-    def generate_temperatures(self, n_stars):
-        return np.full(n_stars, 6000)
+    def generate_temperatures_and_luminosities(self, number_of_stars):
+        #temperatures = np.full(number_of_stars, 6000)
+        #luminosities = np.full(number_of_stars, physics_utils.solar_luminosity)
+        star_population = physics_utils.StarPopulation(red_giant_fraction=0.01, red_supergiant_fraction=0.001,
+                                                       temperature_variance_scale=0.1, luminosity_variance_scale=0.1,
+                                                       seed=(None if self.seed is None else self.seed + 1))
+        temperatures, luminosities = star_population.generate_temperatures_and_luminosities(number_of_stars)
+        return temperatures, luminosities
 
-    def generate_luminosities(self, n_stars):
-        return np.full(n_stars, physics_utils.solar_luminosity)
-
-    def generate_stars(self, n_stars):
-
-        distances = self.generate_distances(n_stars)
-        temperatures = self.generate_temperatures(n_stars)
-        luminosities = self.generate_luminosities(n_stars)
-
+    def generate_stars(self, number_of_stars):
+        distances = self.generate_distances(number_of_stars)
+        temperatures, luminosities = self.generate_temperatures_and_luminosities(number_of_stars)
         stars = physics_utils.BlackbodyStars(self.wavelengths, distances, temperatures, luminosities)
-
         return stars
 
     def generate_star_field(self):
 
-        n_stars = self.generate_star_count()
+        number_of_stars = self.generate_star_count()
 
         total_number_of_grid_cells = self.grid.get_total_window_size()
 
         # Generate 1D index into the image array for each star, using a uniform distribution
-        star_indices = self.random_generator.randint(low=0, high=total_number_of_grid_cells, size=n_stars)
+        star_indices = self.random_generator.randint(low=0, high=total_number_of_grid_cells, size=number_of_stars)
 
-        stars = self.generate_stars(n_stars)
+        stars = self.generate_stars(number_of_stars)
 
         # Compute flux spectrum recieved from each star
         spectral_fluxes = stars.compute_recieved_spectral_fluxes()
@@ -135,8 +133,13 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         field.add_within_window(self.generate_star_field())
 
     def plot_HR_diagram(self, absolute=False, output_path=False):
+
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import ScalarFormatter
+
         stars = self.generate_stars(self.generate_star_count())
-        spectral_fluxes = stars.compute_emitted_spectral_fluxes() if absolute else stars.compute_recieved_spectral_fluxes()
+        spectral_fluxes = stars.compute_recieved_spectral_fluxes_at_distance(math_utils.meters_from_parsecs(10)) if absolute else \
+                          stars.compute_recieved_spectral_fluxes()
         V_band_filter = filters.get_V_band_filter()
         V_band_fluxes = V_band_filter.compute_integrated_flux(self.wavelengths, spectral_fluxes)
         V_band_magnitudes = physics_utils.V_band_magnitude_from_flux(V_band_fluxes)
@@ -145,6 +148,13 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         ax.scatter(stars.temperatures, V_band_magnitudes, c='b', s=0.01, alpha=0.5)
         ax.set_xlabel('Temperature [K]')
         ax.set_ylabel('{} visual magnitude'.format('Absolute' if absolute else 'Apparent'))
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+        ax.set_xscale('log')
+        for axis in [ax.xaxis, ax.yaxis]:
+            axis.set_major_formatter(ScalarFormatter())
+        ax.set_xticks([2000, 4000, 8000, 16000, 32000])
+
         if output_path:
             plt.savefig(output_path)
         else:
