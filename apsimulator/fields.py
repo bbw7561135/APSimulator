@@ -2,7 +2,6 @@
 # This file is part of the APSimulator API.
 # Author: Lars Frogner
 import numpy as np
-import matplotlib.pyplot as plt
 import tempfile
 import grids
 import plot_utils
@@ -330,6 +329,8 @@ class FilteredSpectralField(SpectralField):
 
 
 def visualize_field(field, only_window=True, approximate_wavelength=None, filter_label=None, use_autostretch=False, white_point_scale=1, use_log=False, title='', output_path=None):
+
+    import matplotlib.pyplot as plt
 
     use_colors = False
     was_stretched = False
