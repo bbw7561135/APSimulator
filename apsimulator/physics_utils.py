@@ -11,8 +11,10 @@ boltzmann_constant = 1.38064852e-23 # [J/K]
 stefan_boltzmann_constant = 5.670367e-8 # [W/m^2/K^4]
 light_year = 9.4607304725808e15 # [m]
 
+solar_mass = 1.98847e30 # [kg]
 solar_radius = 6.957e8 # [m]
 solar_luminosity = 3.828e26 # [W]
+solar_surface_temperature = 5778.0 # [K]
 
 V_band_reference_flux = 3e-9 # [W/m^2]
 
@@ -50,6 +52,122 @@ def compute_blackbody_spectral_fluxes(wavelengths, temperature):
                                                          *wavelengths**5)
 
 
+class StarPopulation:
+
+    def __init__(self, red_giant_fraction=0, red_supergiant_fraction=0,
+                       temperature_variance_scale=0, luminosity_variance_scale=0,
+                       seed=None):
+        self.set_star_type_fractions(red_giant_fraction, red_supergiant_fraction)
+        self.set_variance_scales(temperature_variance_scale, luminosity_variance_scale)
+        self.set_seed(seed)
+        self.initialize_mass_ranges()
+        self.initialize_coefficients()
+
+    def set_star_type_fractions(self, red_giant_fraction=0, red_supergiant_fraction=0):
+        self.red_giant_fraction = float(red_giant_fraction)
+        self.red_supergiant_fraction = float(red_supergiant_fraction)
+        self.main_sequence_fraction = 1 - (self.red_giant_fraction + self.red_supergiant_fraction)
+        assert self.main_sequence_fraction >= 0
+
+    def set_variance_scales(self, temperature_variance_scale=0, luminosity_variance_scale=0):
+        self.temperature_variance_scale = float(temperature_variance_scale)
+        self.luminosity_variance_scale = float(luminosity_variance_scale)
+
+    def set_seed(self, seed):
+        self.seed = None if seed is None else int(seed)
+        self.random_generator = np.random.RandomState(seed=self.seed)
+
+    def initialize_mass_ranges(self):
+        self.mass_ranges = {'main sequence':  (0.1, 50),
+                            'red giant':      (3,   8),
+                            'red supergiant': (16,  35)} # [solar masses]
+
+    def initialize_coefficients(self):
+        '''
+        From Zaninetti (2008).
+        '''
+        self.temperature_coefs = {'main sequence':  (1/10**(-7.76),   1/2.06),
+                                  'red giant':      (1/10**(5.8958), -1/1.4563),
+                                  'red supergiant': (1/10**(3.73),  -1/0.64)}
+
+        self.luminosity_coefs = {'main sequence':  (10**0.062, 3.43),
+                                 'red giant':      (10**0.32,  2.79),
+                                 'red supergiant': (10**1.29,  2.43)}
+
+    def generate_star_masses(self, number_of_stars, star_type):
+        '''
+        Generates masses using the initial mass function (IMF) of Maschberger (2012).
+        The IMF describes the probability distribution of masses for a population of
+        stars as they enter the main sequence. The returned masses are in units of the
+        solar mass.
+        '''
+        # Parameters for the Maschberger IMF
+        mu = 0.2 # [solar masses]
+        alpha = 2.3 # [solar masses]
+        beta = 1.4 # [solar masses]
+
+        # Helper function
+        def G(m):
+            return (1 + (m/mu)**(1 - alpha))**(1 - beta)
+
+        mass_range = self.mass_ranges[star_type]
+
+        random_fractions = self.random_generator.random_sample(size=number_of_stars)
+        return mu*((random_fractions*(G(mass_range[1]) - G(mass_range[0])) + G(mass_range[0]))**(1/(1 - beta)) - 1)**(1/(1 - alpha))
+
+    def compute_temperatures(self, masses, star_type):
+        return (self.temperature_coefs[star_type][0]*masses)**self.temperature_coefs[star_type][1]
+
+    def compute_luminosities(self, masses, star_type):
+        return self.luminosity_coefs[star_type][0]*(masses**self.luminosity_coefs[star_type][1])
+
+    def generate_randomized_temperatures(self, masses, star_type):
+        temperatures = self.compute_temperatures(masses, star_type)
+        if self.temperature_variance_scale > 0:
+            temperatures = self.random_generator.normal(loc=temperatures, scale=temperatures*self.temperature_variance_scale)
+        return temperatures
+
+    def generate_randomized_luminosities(self, masses, star_type):
+        luminosities = self.compute_luminosities(masses, star_type)
+        if self.luminosity_variance_scale > 0:
+            luminosities = self.random_generator.normal(loc=luminosities, scale=luminosities*self.luminosity_variance_scale)
+        return luminosities
+
+    def generate_temperatures_and_luminosities(self, number_of_stars):
+
+        n_red_giant_stars = int(self.red_giant_fraction*number_of_stars)
+        n_red_supergiant_stars = int(self.red_supergiant_fraction*number_of_stars)
+        total_n_giant_stars = n_red_giant_stars + n_red_supergiant_stars
+        n_main_sequence_stars = number_of_stars - total_n_giant_stars
+
+        masses = np.empty(number_of_stars)
+        luminosities = np.empty(number_of_stars)
+        temperatures = np.empty(number_of_stars)
+
+        masses[:n_red_giant_stars] = self.generate_star_masses(n_red_giant_stars, 'red giant')
+        masses[n_red_giant_stars:total_n_giant_stars] = self.generate_star_masses(n_red_supergiant_stars, 'red supergiant')
+        masses[total_n_giant_stars:] = self.generate_star_masses(n_main_sequence_stars, 'main sequence')
+
+        temperatures[:n_red_giant_stars] = self.generate_randomized_temperatures(masses[:n_red_giant_stars], 'red giant')
+        temperatures[n_red_giant_stars:total_n_giant_stars] = self.generate_randomized_temperatures(masses[n_red_giant_stars:total_n_giant_stars], 'red supergiant')
+        temperatures[total_n_giant_stars:] = self.generate_randomized_temperatures(masses[total_n_giant_stars:], 'main sequence')
+
+        luminosities[:n_red_giant_stars] = self.generate_randomized_luminosities(masses[:n_red_giant_stars], 'red giant')
+        luminosities[n_red_giant_stars:total_n_giant_stars] = self.generate_randomized_luminosities(masses[n_red_giant_stars:total_n_giant_stars], 'red supergiant')
+        luminosities[total_n_giant_stars:] = self.generate_randomized_luminosities(masses[total_n_giant_stars:], 'main sequence')
+
+        return temperatures, luminosities*solar_luminosity
+
+    def compute_luminosities_wikipedia(self, masses):
+        mass_idx_range = np.searchsorted(masses, (0.43, 2, 55))
+        luminosities = np.empty(masses.size)
+        luminosities[:mass_idx_range[0]] = 0.23*masses[:mass_idx_range[0]]**2.3
+        luminosities[mass_idx_range[0]:mass_idx_range[1]] = masses[mass_idx_range[0]:mass_idx_range[1]]**4
+        luminosities[mass_idx_range[1]:mass_idx_range[2]] = 1.4*masses[mass_idx_range[1]:mass_idx_range[2]]**3.5
+        luminosities[mass_idx_range[2]:] = 32000*masses[mass_idx_range[2]:]
+        return luminosities
+
+
 class BlackbodyStars:
 
     def __init__(self, wavelengths, distances, temperatures, luminosities):
@@ -79,5 +197,11 @@ class BlackbodyStars:
     def compute_spectral_luminosities(self):
         return self.compute_emitted_spectral_fluxes()*self.compute_surface_areas()[np.newaxis, :]
 
+    def compute_recieved_spectral_fluxes_at_distance(self, distance):
+        return self.compute_spectral_luminosities()/(4*np.pi*distance**2)
+
     def compute_recieved_spectral_fluxes(self):
-        return self.compute_spectral_luminosities()/(4*np.pi*self.distances**2)
+        return self.compute_recieved_spectral_fluxes_at_distance(self.distances)
+
+
+
