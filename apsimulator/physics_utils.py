@@ -158,14 +158,20 @@ class StarPopulation:
 
         return temperatures, luminosities*solar_luminosity
 
-    def compute_luminosities_wikipedia(self, masses):
-        mass_idx_range = np.searchsorted(masses, (0.43, 2, 55))
-        luminosities = np.empty(masses.size)
-        luminosities[:mass_idx_range[0]] = 0.23*masses[:mass_idx_range[0]]**2.3
-        luminosities[mass_idx_range[0]:mass_idx_range[1]] = masses[mass_idx_range[0]:mass_idx_range[1]]**4
-        luminosities[mass_idx_range[1]:mass_idx_range[2]] = 1.4*masses[mass_idx_range[1]:mass_idx_range[2]]**3.5
-        luminosities[mass_idx_range[2]:] = 32000*masses[mass_idx_range[2]:]
-        return luminosities
+    def get_red_giant_fraction(self):
+        return self.red_giant_fraction
+
+    def get_red_supergiant_fraction(self):
+        return self.red_supergiant_fraction
+
+    def get_main_sequence_fraction(self):
+        return self.main_sequence_fraction
+
+    def get_temperature_variance_scale(self):
+        return self.temperature_variance_scale
+
+    def get_luminosity_variance_scale(self):
+        return self.luminosity_variance_scale
 
 
 class BlackbodyStars:
