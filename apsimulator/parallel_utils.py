@@ -22,6 +22,10 @@ def set_number_of_threads(n_threads_argument):
     n_threads = max_threads if n_threads_argument == 'auto' else min(max_threads, max(1, int(n_threads_argument)))
 
 
+def get_number_of_threads():
+    return n_threads
+
+
 def subranges(n_elements):
     '''
     Iterator that returns n_threads consecutive subranges in the total range [0, n_elements].
