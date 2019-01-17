@@ -9,24 +9,6 @@ import math_utils
 import physics_utils
 
 
-def sum_overlapping_values(positions, values):
-    assert positions.ndim == 1
-    assert values.ndim == 2
-    assert values.shape[1] == positions.size
-
-    indices_of_positions_when_sorted = np.argsort(positions)
-    sorted_positions = positions[indices_of_positions_when_sorted]
-    unique_positions, start_indices_of_unique_positions = np.unique(sorted_positions, return_index=True)
-    indices_of_all_occurances_of_each_position = np.split(indices_of_positions_when_sorted, start_indices_of_unique_positions[1:])
-
-    summed_values = np.empty((values.shape[0], unique_positions.size))
-
-    for i in range(unique_positions.size):
-        summed_values[:, i] = np.sum(values[:, indices_of_all_occurances_of_each_position[i]], axis=1)
-
-    return unique_positions, summed_values
-
-
 class UniformStarField(field_processing.AdditiveFieldProcessor):
 
     def __init__(self, stellar_density=0.14, near_distance=2, far_distance=15000,
@@ -131,13 +113,30 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
 
         if self.combine_overlapping_stars:
             # Handle multiple stars in the same grid cells by summing the spectral fluxes with the same indices
-            star_indices, spectral_fluxes = sum_overlapping_values(star_indices, spectral_fluxes)
+            star_indices, spectral_fluxes = self.sum_overlapping_values(star_indices, spectral_fluxes)
 
         star_field = np.zeros((self.n_wavelengths, total_number_of_grid_cells), dtype=self.dtype)
         star_field[:, star_indices] = spectral_fluxes
         star_field = star_field.reshape((self.n_wavelengths, *self.grid.window.shape))
 
         return star_field
+
+    def sum_overlapping_values(self, positions, values):
+        assert positions.ndim == 1
+        assert values.ndim == 2
+        assert values.shape[1] == positions.size
+
+        indices_of_positions_when_sorted = np.argsort(positions)
+        sorted_positions = positions[indices_of_positions_when_sorted]
+        unique_positions, start_indices_of_unique_positions = np.unique(sorted_positions, return_index=True)
+        indices_of_all_occurances_of_each_position = np.split(indices_of_positions_when_sorted, start_indices_of_unique_positions[1:])
+
+        summed_values = np.empty((values.shape[0], unique_positions.size))
+
+        for i in range(unique_positions.size):
+            summed_values[:, i] = np.sum(values[:, indices_of_all_occurances_of_each_position[i]], axis=1)
+
+        return unique_positions, summed_values
 
     def process(self, field):
         '''
@@ -335,7 +334,7 @@ class UniformBlackbodySkyglow(field_processing.AdditiveFieldProcessor):
 
 
 class MoonSkyglow(UniformBlackbodySkyglow):
-
-    def __init__(self, illumination_percentage, relative_polar_angle):
+    # Possible model: Bradley Schaefer (1998) (used in Stellarioum)
+    def __init__(self, illumination_percentage, altitude_angle, relative_polar_angle):
         self.illumination_percentage = float(illumination_percentage)
         self.relative_polar_angle = float(relative_polar_angle)
