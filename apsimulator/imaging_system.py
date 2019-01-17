@@ -2,12 +2,12 @@
 # This file is part of the APSimulator API.
 # Author: Lars Frogner
 import numpy as np
-import matplotlib.pyplot as plt
 import math_utils
 import grids
 import fields
 import field_processing
 import filters
+import render
 
 
 class ImagingSystem:
@@ -249,8 +249,9 @@ class ImagingSystem:
         assert self.has_camera
         return self.camera
 
-    def visualize_energy_conservation(self):
+    def visualize_energy_conservation(self, output_path=False):
         assert self.has_imager
+
         #source_spectral_powers = self.compute_source_spectral_powers()
         #incident_spectral_powers = self.compute_incident_spectral_powers()
         transmitted_spectral_powers = self.compute_transmitted_spectral_powers()
@@ -265,7 +266,7 @@ class ImagingSystem:
         image_power = np.trapz(image_spectral_powers, x=self.wavelengths)
         postprocessed_image_power = np.trapz(postprocessed_image_spectral_powers, x=self.wavelengths)
 
-        fig, ax = plt.subplots()
+        fig, ax = plot_utils.subplots()
         alpha = 1
         #ax.plot(self.wavelengths, source_spectral_powers, '.', alpha=alpha, label='Source ({:g} W total)'.format(source_power))
         #ax.plot(self.wavelengths, incident_spectral_powers, '-', alpha=alpha, label='Incident ({:g} W total)'.format(incident_power))
@@ -277,7 +278,7 @@ class ImagingSystem:
         ax.set_xlabel('Wavelength [m]')
         ax.set_ylabel('Spectral power [W/m]')
         ax.legend(loc='best')
-        plt.show()
+        plot_utils.render(output_path)
 
     def visualize_source_field(self, label, **plot_kwargs):
         self.source_pipeline.visualize_process_field(label, **plot_kwargs)

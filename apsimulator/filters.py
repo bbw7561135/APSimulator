@@ -8,6 +8,7 @@ import fields
 import math_utils
 import physics_utils
 import io_utils
+import plot_utils
 
 
 class FilterSet:
@@ -81,21 +82,16 @@ class FilterSet:
         return self.n_filters == 0
 
     def visualize_filter_transmittances(self, wavelengths, output_path=False):
-        import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots()
+        fig, ax = plot_utils.subplots()
         for filter_ in self.filters.values():
             ax.plot(wavelengths*1e9, filter_.compute_transmittances_for_wavelengths(wavelengths), label=filter_.label)
         ax.set_xlabel('Wavelength [nm]')
         ax.set_ylabel('Transmittance')
         ax.legend(loc='best')
 
-        plt.tight_layout()
-
-        if output_path:
-            plt.savefig(output_path)
-        else:
-            plt.show()
+        plot_utils.tight_layout()
+        plot_utils.render(output_path)
 
     def get_full_wavelength_range(self):
         if self.is_empty():

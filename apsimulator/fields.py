@@ -330,8 +330,6 @@ class FilteredSpectralField(SpectralField):
 
 def visualize_field(field, only_window=True, approximate_wavelength=None, filter_label=None, use_autostretch=False, white_point_scale=1, use_log=False, title='', output_path=None):
 
-    import matplotlib.pyplot as plt
-
     use_colors = False
     was_stretched = False
 
@@ -412,7 +410,7 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, filter
         ylabel = r'$y$ [focal lengths]'
         clabel = '{}Flux [W/m^2/m]'.format(log_label)
 
-    fig = plt.figure()
+    fig = plot_utils.figure()
 
     if field.dtype == 'complex128' and not use_colors:
         left_ax = fig.add_subplot(121)
@@ -423,9 +421,9 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, filter
         ax = fig.add_subplot(111)
         plot_utils.plot_image(fig, ax, field_values, vmin=vmin, vmax=vmax, xlabel=xlabel, ylabel=ylabel, title=title, extent=extent, clabel=clabel, colorbar=colorbar)
 
-    plt.tight_layout()
+    plot_utils.tight_layout()
 
     if output_path is None:
-        plt.show()
+        plot_utils.show()
     else:
-        plt.savefig(output_path)
+        plot_utils.savefig(output_path)

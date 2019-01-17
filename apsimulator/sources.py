@@ -7,6 +7,7 @@ import filters
 import field_processing
 import math_utils
 import physics_utils
+import plot_utils
 
 
 class UniformStarField(field_processing.AdditiveFieldProcessor):
@@ -147,7 +148,6 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
 
     def plot_HR_diagram(self, absolute=False, output_path=False):
 
-        import matplotlib.pyplot as plt
         from matplotlib.ticker import ScalarFormatter
 
         stars = self.generate_stars(self.generate_star_count())
@@ -157,7 +157,7 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
         V_band_fluxes = V_band_filter.compute_integrated_flux(self.wavelengths, spectral_fluxes)
         V_band_magnitudes = physics_utils.V_band_magnitude_from_flux(V_band_fluxes)
 
-        fig, ax = plt.subplots()
+        fig, ax = plot_utils.subplots()
         ax.scatter(stars.temperatures, V_band_magnitudes, c='b', s=0.01, alpha=0.5)
         ax.set_xlabel('Temperature [K]')
         ax.set_ylabel('{} visual magnitude'.format('Absolute' if absolute else 'Apparent'))
@@ -168,12 +168,8 @@ class UniformStarField(field_processing.AdditiveFieldProcessor):
             axis.set_major_formatter(ScalarFormatter())
         ax.set_xticks([2000, 4000, 8000, 16000, 32000])
 
-        plt.tight_layout()
-
-        if output_path:
-            plt.savefig(output_path)
-        else:
-            plt.show()
+        plot_utils.tight_layout()
+        plot_utils.render(output_path)
 
     def get_stellar_density(self):
         return self.stellar_density

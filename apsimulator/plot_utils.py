@@ -2,8 +2,33 @@
 # This file is part of the APSimulator API.
 # Author: Lars Frogner
 import numpy as np
+import matplotlib as mpl
+mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
+
+
+def figure(*args, **kwargs):
+    return plt.figure(*args, **kwargs)
+
+
+def subplots(*args, **kwargs):
+    return plt.subplots(*args, **kwargs)
+
+
+def tight_layout(*args, **kwargs):
+    plt.tight_layout(*args, **kwargs)
+
+
+def savefig(*args, **kwargs):
+    plt.savefig(*args, **kwargs)
+
+
+def render(output_path=False):
+    if output_path:
+        savefig(output_path)
+    else:
+        plt.show()
 
 
 def add_colorbar(fig, ax, image, label='', aspect=0.05, pad=0.4, side='right'):
