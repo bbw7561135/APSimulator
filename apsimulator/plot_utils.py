@@ -59,3 +59,8 @@ def plot_image(fig, ax, values, vmin=None, vmax=None, xlabel='', ylabel='', titl
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
+
+
+def instant_plot(*args, **kwargs):
+    plt.plot(*args, **kwargs)
+    plt.show()
