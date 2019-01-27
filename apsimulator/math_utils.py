@@ -78,12 +78,34 @@ def is_power_of_two(number):
     return number != 0 and ((number & (number - 1)) == 0)
 
 
+def nearest_power_of_2_exponent(number):
+    return int(round(np.log2(number)))
+
+
+def nearest_power_of_2(number):
+    return 2**nearest_power_of_2_exponent(number)
+
+
+def nearest_lower_power_of_2_exponent(number):
+    return int(np.floor(np.log2(number)))
+
+
+def nearest_lower_power_of_2(number):
+    return 2**nearest_lower_power_of_2_exponent(number)
+
+
 def nearest_higher_power_of_2_exponent(number):
     return int(np.ceil(np.log2(number)))
 
 
 def nearest_higher_power_of_2(number):
     return 2**nearest_higher_power_of_2_exponent(number)
+
+
+def angular_distances(angles_1, angles_2):
+    differences = (angles_1 - angles_2) % (2*np.pi)
+    differences[differences > np.pi] -= 2*np.pi
+    return np.abs(differences)
 
 
 def angular_coordinates_from_spherical_angles(polar_angle, azimuth_angle):
