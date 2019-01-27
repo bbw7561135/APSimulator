@@ -15,7 +15,7 @@ class Regular2DField:
     '''
     def __init__(self, grid, initial_value=0, dtype='float64', use_memmap=False, copy_initial_array=True):
         self.grid = grid # Grid2D object representing the shape and physical dimensions of the field
-        self.dtype = str(dtype) # Numpy data type to use for the field values
+        self.dtype = np.dtype(dtype) # Numpy data type to use for the field values
         self.use_memmap = bool(use_memmap) # Whether to store the field values in a memory mapped file
         self.copy_initial_array = bool(copy_initial_array) # If initial_value is an array (or memmap), this specifies
                                                            # whether to copy the values or use a reference
@@ -362,7 +362,7 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, filter
         wavelength = field.wavelengths[wavelength_idx]
         field_values = field_values[wavelength_idx, :, :]
 
-    if field.dtype == 'complex128' and not use_colors:
+    if field.dtype == np.dtype('complex128') and not use_colors:
         phases = np.angle(field_values)
         field_values = np.abs(field_values)
         phases[field_values == 0] = np.nan
@@ -412,7 +412,7 @@ def visualize_field(field, only_window=True, approximate_wavelength=None, filter
 
     fig = plot_utils.figure()
 
-    if field.dtype == 'complex128' and not use_colors:
+    if field.dtype == np.dtype('complex128') and not use_colors:
         left_ax = fig.add_subplot(121)
         plot_utils.plot_image(fig, left_ax, field_values, xlabel=xlabel, ylabel=ylabel, title=title, extent=extent, clabel=clabel)
         right_ax = fig.add_subplot(122)
