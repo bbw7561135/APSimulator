@@ -40,3 +40,13 @@ def perform_autostretch(image, new_mean=0.25):
     stretched_image = perform_midtone_stretch(clipped_image, midtones_balance)
 
     return stretched_image
+
+
+def perform_fast_gamma_correction(image):
+    clipped_image = perform_histogram_clip(image)
+    return np.sqrt(clipped_image) # gamma = 1/2
+
+
+def perform_gamma_correction(image, gamma=1/2.2):
+    clipped_image = perform_histogram_clip(image)
+    return perform_fast_gamma_correction(image) if gamma == 0.5 else clipped_image**gamma
