@@ -1,0 +1,814 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1058</width>
+    <height>741</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout_4">
+    <item row="0" column="0">
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>2</number>
+      </property>
+      <widget class="QWidget" name="morphologyTab">
+       <attribute name="title">
+        <string>Morphology</string>
+       </attribute>
+       <widget class="QWidget" name="layoutWidget">
+        <property name="geometry">
+         <rect>
+          <x>13</x>
+          <y>32</y>
+          <width>391</width>
+          <height>170</height>
+         </rect>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_2">
+         <item row="0" column="6">
+          <widget class="QDoubleSpinBox" name="windingNumberSpinBox"/>
+         </item>
+         <item row="1" column="0" colspan="2">
+          <widget class="QLabel" name="bulgeToArmRatioLabel">
+           <property name="text">
+            <string>Bulge/arm ratio</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2" colspan="4">
+          <widget class="QSlider" name="bulgeToArmRatioSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="6">
+          <widget class="QDoubleSpinBox" name="bulgeToArmRatioSpinBox"/>
+         </item>
+         <item row="3" column="5" colspan="2">
+          <widget class="QPushButton" name="removeArmButton">
+           <property name="text">
+            <string>Remove</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="6">
+          <widget class="QDoubleSpinBox" name="armScaleSpinBox"/>
+         </item>
+         <item row="0" column="0" colspan="2">
+          <widget class="QLabel" name="windingNumberLabel">
+           <property name="text">
+            <string>Winding number</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2" colspan="4">
+          <widget class="QSlider" name="windingNumberSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="2" colspan="4">
+          <widget class="QSlider" name="armScaleSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0" colspan="2">
+          <widget class="QLabel" name="armScaleLabel">
+           <property name="text">
+            <string>Arm scale</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="6">
+          <widget class="QDoubleSpinBox" name="armAngleSpinBox"/>
+         </item>
+         <item row="4" column="0" colspan="2">
+          <widget class="QLabel" name="armAngleLabel">
+           <property name="text">
+            <string>Arm angle</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="2" colspan="4">
+          <widget class="QSlider" name="armAngleSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0" colspan="2">
+          <widget class="QComboBox" name="armsComboBox"/>
+         </item>
+         <item row="3" column="2" colspan="3">
+          <widget class="QPushButton" name="newArmButton">
+           <property name="text">
+            <string>New</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QPushButton" name="resetMorphologyParametersButton">
+        <property name="geometry">
+         <rect>
+          <x>160</x>
+          <y>210</y>
+          <width>77</width>
+          <height>32</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="diskComponentsTab">
+       <attribute name="title">
+        <string>Disk components</string>
+       </attribute>
+       <widget class="QPushButton" name="resetDiskComponentParametersButton">
+        <property name="geometry">
+         <rect>
+          <x>160</x>
+          <y>470</y>
+          <width>77</width>
+          <height>32</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+       <widget class="QWidget" name="">
+        <property name="geometry">
+         <rect>
+          <x>6</x>
+          <y>11</y>
+          <width>401</width>
+          <height>451</height>
+         </rect>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <layout class="QGridLayout" name="gridLayout">
+           <item row="1" column="0" colspan="2">
+            <widget class="QLabel" name="diskComponentsLabel">
+             <property name="text">
+              <string>Component</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="4">
+            <widget class="QPushButton" name="removeDiskComponentButton">
+             <property name="text">
+              <string>Remove</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="3">
+            <widget class="QPushButton" name="newDiskComponentButton">
+             <property name="text">
+              <string>New</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="2">
+            <widget class="QComboBox" name="diskComponentsComboBox">
+             <property name="editable">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QComboBox" name="diskComponentTypeComboBox"/>
+           </item>
+           <item row="0" column="0" colspan="2">
+            <widget class="QLabel" name="diskComponentTypeLabel">
+             <property name="text">
+              <string>Type</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="2">
+            <widget class="QLineEdit" name="diskComponentNameLineEdit"/>
+           </item>
+           <item row="2" column="0" colspan="2">
+            <widget class="QLabel" name="diskComponentNameLabel">
+             <property name="text">
+              <string>Name</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="3">
+            <widget class="QPushButton" name="setDiskComponentNameButton">
+             <property name="text">
+              <string>Set</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="4" alignment="Qt::AlignHCenter">
+            <widget class="QCheckBox" name="diskComponentActiveCheckBox">
+             <property name="text">
+              <string>Active</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QTabWidget" name="diskComponentParameterTabWidget">
+           <property name="currentIndex">
+            <number>0</number>
+           </property>
+           <widget class="QWidget" name="structureTab">
+            <attribute name="title">
+             <string>Structure</string>
+            </attribute>
+            <widget class="QWidget" name="">
+             <property name="geometry">
+              <rect>
+               <x>11</x>
+               <y>2</y>
+               <width>371</width>
+               <height>211</height>
+              </rect>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_5">
+              <item row="0" column="0">
+               <widget class="QLabel" name="diskComponentStrengthScaleLabel">
+                <property name="text">
+                 <string>Strength scale</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QSlider" name="diskComponentStrengthScaleSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentStrengthScaleSpinBox"/>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="diskComponentDiskExtentLabel">
+                <property name="text">
+                 <string>Disk extent</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSlider" name="diskComponentDiskExtentSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentDiskExtentSpinBox"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="diskComponentDiskThicknessLabel">
+                <property name="text">
+                 <string>Disk thickness</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QSlider" name="diskComponentDiskThicknessSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentDiskThicknessSpinBox">
+                <property name="decimals">
+                 <number>3</number>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="diskComponentArmNarrownessLabel">
+                <property name="text">
+                 <string>Arm narrowness</string>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QSlider" name="diskComponentArmNarrownessSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentArmNarrownessSpinBox"/>
+              </item>
+              <item row="4" column="0">
+               <widget class="QLabel" name="diskComponentTwirlFactorLabel">
+                <property name="text">
+                 <string>Twirl factor</string>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="1">
+               <widget class="QSlider" name="diskComponentTwirlFactorSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentTwirlFactorSpinBox"/>
+              </item>
+              <item row="5" column="0">
+               <widget class="QCheckBox" name="diskComponentEmissiveCheckBox">
+                <property name="text">
+                 <string>Emissive</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </widget>
+           <widget class="QWidget" name="noiseTab">
+            <attribute name="title">
+             <string>Noise</string>
+            </attribute>
+            <widget class="QWidget" name="layoutWidget">
+             <property name="geometry">
+              <rect>
+               <x>1</x>
+               <y>10</y>
+               <width>391</width>
+               <height>291</height>
+              </rect>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_6">
+              <item row="0" column="0">
+               <layout class="QHBoxLayout" name="horizontalLayout">
+                <item>
+                 <widget class="QLabel" name="diskComponentNumberOfOctavesLabel">
+                  <property name="text">
+                   <string>Octaves</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSpinBox" name="diskComponentNumberOfOctavesSpinBox"/>
+                </item>
+               </layout>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="diskComponentInitialFrequencyLabel">
+                <property name="text">
+                 <string>Initial frequency</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSlider" name="diskComponentInitialFrequencySlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentInitialFrequencySpinBox"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="diskComponentLacunarityLabel">
+                <property name="text">
+                 <string>Lacunarity</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QSlider" name="diskComponentLacunaritySlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentLacunaritySpinBox"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="diskComponentPersistenceLabel">
+                <property name="text">
+                 <string>Persistence</string>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QSlider" name="diskComponentPersistenceSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentPersistenceSpinBox"/>
+              </item>
+              <item row="4" column="0">
+               <widget class="QLabel" name="diskComponentNoiseThresholdLabel">
+                <property name="text">
+                 <string>Threshold</string>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="1">
+               <widget class="QSlider" name="diskComponentNoiseThresholdSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseThresholdSpinBox"/>
+              </item>
+              <item row="5" column="0">
+               <widget class="QLabel" name="diskComponentNoiseCutoffLabel">
+                <property name="text">
+                 <string>Cutoff</string>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="1">
+               <widget class="QSlider" name="diskComponentNoiseCutoffSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseCutoffSpinBox"/>
+              </item>
+              <item row="6" column="0">
+               <widget class="QLabel" name="diskComponentNoiseExponentLabel">
+                <property name="text">
+                 <string>Exponent</string>
+                </property>
+               </widget>
+              </item>
+              <item row="6" column="1">
+               <widget class="QSlider" name="diskComponentNoiseExponentSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="6" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseExponentSpinBox"/>
+              </item>
+              <item row="7" column="0">
+               <widget class="QLabel" name="diskComponentNoiseOffsetLabel">
+                <property name="text">
+                 <string>Offset</string>
+                </property>
+               </widget>
+              </item>
+              <item row="7" column="1">
+               <widget class="QSlider" name="diskComponentNoiseOffsetSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="7" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseOffsetSpinBox"/>
+              </item>
+              <item row="0" column="1" colspan="2">
+               <layout class="QHBoxLayout" name="horizontalLayout_2">
+                <item>
+                 <widget class="QLabel" name="diskComponentSeedLabel">
+                  <property name="text">
+                   <string>Seed</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSpinBox" name="diskComponentSeedSpinBox"/>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="diskComponentSeedButton">
+                  <property name="text">
+                   <string>Random</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </widget>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="bulgeComponentsTab">
+       <attribute name="title">
+        <string>Bulge components</string>
+       </attribute>
+       <widget class="QPushButton" name="resetBulgeComponentParametersButton">
+        <property name="geometry">
+         <rect>
+          <x>160</x>
+          <y>270</y>
+          <width>77</width>
+          <height>32</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+       <widget class="QWidget" name="">
+        <property name="geometry">
+         <rect>
+          <x>9</x>
+          <y>30</y>
+          <width>391</width>
+          <height>81</height>
+         </rect>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_7">
+         <item row="0" column="0">
+          <widget class="QLabel" name="bulgeComponentsLabel">
+           <property name="text">
+            <string>Component</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QComboBox" name="bulgeComponentsComboBox">
+           <property name="editable">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QPushButton" name="newBulgeComponentButton">
+           <property name="text">
+            <string>New</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="3">
+          <widget class="QPushButton" name="removeBulgeComponentButton">
+           <property name="text">
+            <string>Remove</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="bulgeComponentNameLabel">
+           <property name="text">
+            <string>Name</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="bulgeComponentNameLineEdit"/>
+         </item>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="setBulgeComponentNameButton">
+           <property name="text">
+            <string>Set</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="3">
+          <widget class="QCheckBox" name="bulgeComponentActiveCheckBox">
+           <property name="text">
+            <string>Active</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>150</y>
+          <width>391</width>
+          <height>101</height>
+         </rect>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_8">
+         <item row="0" column="0">
+          <widget class="QLabel" name="bulgeComponentStrengthScaleLabel">
+           <property name="text">
+            <string>Strength scale</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QSlider" name="bulgeComponentStrengthScaleSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QDoubleSpinBox" name="bulgeComponentStrengthScaleSpinBox"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="bulgeComponentBulgeSizeLabel">
+           <property name="text">
+            <string>Size</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QSlider" name="bulgeComponentBulgeSizeSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QDoubleSpinBox" name="bulgeComponentBulgeSizeSpinBox">
+           <property name="decimals">
+            <number>3</number>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QCheckBox" name="bulgeComponentEmissiveCheckBox">
+           <property name="text">
+            <string>Emissive</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </widget>
+    </item>
+    <item row="0" column="1" rowspan="2">
+     <widget class="QLabel" name="galaxyFrameLabel">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>600</width>
+        <height>600</height>
+       </size>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="scaledContents">
+       <bool>false</bool>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <widget class="QLabel" name="polarAngleLabel">
+        <property name="text">
+         <string>Polar angle</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QDoubleSpinBox" name="polarAngleSpinBox"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="azimuthAngleLabel">
+        <property name="text">
+         <string>Azimuth angle</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QDoubleSpinBox" name="azimuthAngleSpinBox"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="scaleLabel">
+        <property name="text">
+         <string>Scale</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QDoubleSpinBox" name="scaleSpinBox"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="resolutionLabel">
+        <property name="text">
+         <string>Resolution</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="resolutionComboBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QPushButton" name="generateButton">
+        <property name="text">
+         <string>Generate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QCheckBox" name="autoGenerateCheckBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Auto generate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="2">
+       <widget class="QSlider" name="polarAngleSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QSlider" name="azimuthAngleSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1" colspan="2">
+       <widget class="QSlider" name="scaleSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1058</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
