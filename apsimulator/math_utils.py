@@ -58,6 +58,14 @@ def inverse_cubic_meters_from_inverse_cubic_parsecs(inverse_cubic_parsecs):
     return 3.404e-50*inverse_cubic_parsecs
 
 
+def radian_from_degree(angle):
+    return angle*np.pi/180
+
+
+def degree_from_radian(angle):
+    return angle*180/np.pi
+
+
 def arcsec_from_radian(angle):
     return angle*206264.806
 
@@ -100,6 +108,13 @@ def nearest_higher_power_of_2_exponent(number):
 
 def nearest_higher_power_of_2(number):
     return 2**nearest_higher_power_of_2_exponent(number)
+
+
+def angular_distance(angle_1, angle_2):
+    difference = (angle_1 - angle_2) % (2*np.pi)
+    if difference > np.pi:
+        difference -= 2*np.pi
+    return abs(difference)
 
 
 def angular_distances(angles_1, angles_2):
