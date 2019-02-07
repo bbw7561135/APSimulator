@@ -124,11 +124,12 @@ class Galaxy:
         self.dy = self.y_coordinates[1] - self.y_coordinates[0]
         self.dz = self.z_coordinates[1] - self.z_coordinates[0]
 
-    def compute_intensity(self, emission, attenuation):
+    def compute_intensity(self):
+        return self.compute_intensity_from_emission_and_attenuation(*self.compute_emission_and_attenuation())
 
+    def compute_intensity_from_emission_and_attenuation(self, emission, attenuation):
         transparency = np.exp(-np.cumsum(attenuation[:, :, ::-1], axis=2)*self.dz)
         intensity = np.sum(emission[:, :, ::-1]*transparency, axis=2)*self.dz
-
         return intensity
 
     def compute_emission_and_attenuation(self):
@@ -199,10 +200,6 @@ class Galaxy:
                     total_emission[:] += strength
                 else:
                     total_attenuation[:] += strength
-
-    def generate_intensity_image(self, output_path, gamma=0.5):
-        intensity = self.compute_intensity(*self.compute_emission_and_attenuation())
-        plot_utils.save_pure_image(output_path, intensity, gamma=gamma)
 
     def get_resolution(self):
         return self.resolution
@@ -965,14 +962,3 @@ class GalaxyStars(GalaxyDiskComponent):
                 'noise_exponent':    6,
                 'noise_offset':      0,
                 'seed':              noise_utils.get_random_seed()}
-
-
-if __name__ == '__main__':
-
-    galaxy = Galaxy(512, GalaxyMorphology(), GalaxyOrientation(normal_axis=(0, 0, 1)), [GalaxyDust(), GalaxyStars(), GalaxyFilaments()], [GalaxyBulgeComponent()])
-    intensity = galaxy.compute_intensity()
-
-    fig, ax = plot_utils.subplots()
-    plot_utils.plot_image(fig, ax, intensity.T, vmax=0.1, colorbar=False)
-    plot_utils.tight_layout()
-    plot_utils.render('test.png')
