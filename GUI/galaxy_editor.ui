@@ -13,12 +13,122 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="dockNestingEnabled">
+   <bool>false</bool>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_4">
+    <item row="1" column="0">
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <widget class="QLabel" name="polarAngleLabel">
+        <property name="text">
+         <string>Polar angle</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QDoubleSpinBox" name="polarAngleSpinBox"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="azimuthAngleLabel">
+        <property name="text">
+         <string>Azimuth angle</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QDoubleSpinBox" name="azimuthAngleSpinBox"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="scaleLabel">
+        <property name="text">
+         <string>Scale</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="3">
+       <widget class="QDoubleSpinBox" name="scaleSpinBox"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="resolutionLabel">
+        <property name="text">
+         <string>Resolution</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="resolutionComboBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QPushButton" name="generateButton">
+        <property name="text">
+         <string>Generate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QCheckBox" name="autoGenerateCheckBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Auto generate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="2">
+       <widget class="QSlider" name="polarAngleSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QSlider" name="azimuthAngleSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1" colspan="2">
+       <widget class="QSlider" name="scaleSlider">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
     <item row="0" column="0">
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>3</number>
+      </property>
+      <property name="elideMode">
+       <enum>Qt::ElideRight</enum>
+      </property>
+      <property name="usesScrollButtons">
+       <bool>false</bool>
+      </property>
+      <property name="documentMode">
+       <bool>false</bool>
+      </property>
+      <property name="tabBarAutoHide">
+       <bool>false</bool>
       </property>
       <widget class="QWidget" name="morphologyTab">
        <attribute name="title">
@@ -137,7 +247,7 @@
       </widget>
       <widget class="QWidget" name="diskComponentsTab">
        <attribute name="title">
-        <string>Disk components</string>
+        <string>Disk</string>
        </attribute>
        <widget class="QPushButton" name="resetDiskComponentParametersButton">
         <property name="geometry">
@@ -530,7 +640,7 @@
       </widget>
       <widget class="QWidget" name="bulgeComponentsTab">
        <attribute name="title">
-        <string>Bulge components</string>
+        <string>Bulge</string>
        </attribute>
        <widget class="QPushButton" name="resetBulgeComponentParametersButton">
         <property name="geometry">
@@ -670,6 +780,72 @@
         </layout>
        </widget>
       </widget>
+      <widget class="QWidget" name="visualizationTab">
+       <attribute name="title">
+        <string>Visualization</string>
+       </attribute>
+       <widget class="QWidget" name="">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>30</y>
+          <width>391</width>
+          <height>101</height>
+         </rect>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_9">
+         <item row="0" column="0">
+          <widget class="QLabel" name="gammaLabel">
+           <property name="text">
+            <string>Gamma</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QSlider" name="gammaSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QDoubleSpinBox" name="gammaSpinBox"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="brightnessLabel">
+           <property name="text">
+            <string>Brightness</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QSlider" name="brightnessSlider">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QDoubleSpinBox" name="brightnessSpinBox"/>
+         </item>
+         <item row="2" column="0" colspan="2">
+          <widget class="QCheckBox" name="fixBrightnessReferenceCheckBox">
+           <property name="text">
+            <string>Fix brightness reference</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <zorder>gammaLabel</zorder>
+       <zorder>gammaSlider</zorder>
+       <zorder>gammaSpinBox</zorder>
+       <zorder>brightnessLabel</zorder>
+       <zorder>brightnessSpinBox</zorder>
+       <zorder>brightnessSlider</zorder>
+       <zorder>fixBrightnessReferenceCheckBox</zorder>
+       <zorder>galaxyFrameLabel</zorder>
+      </widget>
      </widget>
     </item>
     <item row="0" column="1" rowspan="2">
@@ -699,101 +875,6 @@
        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
       </property>
      </widget>
-    </item>
-    <item row="1" column="0">
-     <layout class="QGridLayout" name="gridLayout_3">
-      <item row="0" column="0">
-       <widget class="QLabel" name="polarAngleLabel">
-        <property name="text">
-         <string>Polar angle</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="3">
-       <widget class="QDoubleSpinBox" name="polarAngleSpinBox"/>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="azimuthAngleLabel">
-        <property name="text">
-         <string>Azimuth angle</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="3">
-       <widget class="QDoubleSpinBox" name="azimuthAngleSpinBox"/>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="scaleLabel">
-        <property name="text">
-         <string>Scale</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="3">
-       <widget class="QDoubleSpinBox" name="scaleSpinBox"/>
-      </item>
-      <item row="3" column="0">
-       <widget class="QLabel" name="resolutionLabel">
-        <property name="text">
-         <string>Resolution</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
-       <widget class="QComboBox" name="resolutionComboBox">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="2">
-       <widget class="QPushButton" name="generateButton">
-        <property name="text">
-         <string>Generate</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="3">
-       <widget class="QCheckBox" name="autoGenerateCheckBox">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="text">
-         <string>Auto generate</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1" colspan="2">
-       <widget class="QSlider" name="polarAngleSlider">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1" colspan="2">
-       <widget class="QSlider" name="azimuthAngleSlider">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1" colspan="2">
-       <widget class="QSlider" name="scaleSlider">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-     </layout>
     </item>
    </layout>
   </widget>

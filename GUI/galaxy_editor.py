@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.join('..', 'apsimulator'))
 import galaxy_generation
 import math_utils
 import parallel_utils
+import image_utils
+import plot_utils
 
 
 class MainWindow(QObject):
@@ -21,12 +23,16 @@ class MainWindow(QObject):
 
         self.load_ui()
 
+        self.disable_auto_generate = False
+        self.disable_parameter_updates = False
+
         self.setup_galaxy_frame()
         self.setup_generation_control()
         self.setup_orientation_adjustment()
         self.setup_morphology_adjustment()
         self.setup_disk_component_adjustment()
         self.setup_bulge_component_adjustment()
+        self.setup_visualization_control()
 
         parallel_utils.set_number_of_threads(12)
 
@@ -56,7 +62,6 @@ class MainWindow(QObject):
 
     def setup_auto_generate_checkbox(self):
         self.auto_generate_checkbox = self.window.findChild(QCheckBox, 'autoGenerateCheckBox')
-        self.disable_auto_generate = False
 
     def auto_generate_galaxy_image(self, *args):
         if self.auto_generate_checkbox.isChecked() and not self.disable_auto_generate:
@@ -70,11 +75,12 @@ class MainWindow(QObject):
 
         @Slot(int)
         def resolution_combo_box_action(index):
-            self.galaxy.set_resolution(resolutions[index])
+            if not self.disable_parameter_updates:
+                self.galaxy.set_resolution(resolutions[index])
             self.auto_generate_galaxy_image()
 
-        self.resolution_combo_box.currentIndexChanged.connect(resolution_combo_box_action)
         self.resolution_combo_box.setCurrentIndex(resolutions.index(self.galaxy.get_resolution()))
+        self.resolution_combo_box.currentIndexChanged.connect(resolution_combo_box_action)
 
     def setup_scale_adjustment(self):
         self.scale_slider = self.window.findChild(QSlider, 'scaleSlider')
@@ -99,7 +105,8 @@ class MainWindow(QObject):
 
     def generate_galaxy_image(self):
         image_path = os.path.join(os.getcwd(), 'galaxy.png')
-        self.galaxy.generate_intensity_image(image_path)
+        image_values = self.convert_intensity_to_image_values(self.galaxy.compute_intensity())
+        plot_utils.save_pure_image(image_path, image_values)
         self.galaxy_frame_label.setPixmap(QPixmap(image_path).scaled(self.galaxy_frame_label.width(),
                                                                      self.galaxy_frame_label.height(),
                                                                      aspectMode=Qt.KeepAspectRatio,
@@ -116,24 +123,30 @@ class MainWindow(QObject):
         self.polar_angle_spinbox = self.window.findChild(QDoubleSpinBox, 'polarAngleSpinBox')
 
         def polar_angle_setter(angle):
-            self.galaxy.get_orientation().set_polar_angle(math_utils.radian_from_degree(angle))
+            if not self.disable_parameter_updates:
+                self.galaxy.get_orientation().set_polar_angle(math_utils.radian_from_degree(angle))
             self.auto_generate_galaxy_image()
 
         setup_slider_and_spinbox(self.polar_angle_slider, self.polar_angle_spinbox, 0, 180, 1, polar_angle_setter)
 
+        self.disable_parameter_updates = True
         self.polar_angle_spinbox.setValue(math_utils.degree_from_radian(self.galaxy.get_orientation().get_polar_angle()))
+        self.disable_parameter_updates = False
 
     def setup_azimuth_angle_adjustment(self):
         self.azimuth_angle_slider = self.window.findChild(QSlider, 'azimuthAngleSlider')
         self.azimuth_angle_spinbox = self.window.findChild(QDoubleSpinBox, 'azimuthAngleSpinBox')
 
         def azimuth_angle_setter(angle):
-            self.galaxy.get_orientation().set_azimuth_angle(math_utils.radian_from_degree(angle))
+            if not self.disable_parameter_updates:
+                self.galaxy.get_orientation().set_azimuth_angle(math_utils.radian_from_degree(angle))
             self.auto_generate_galaxy_image()
 
         setup_slider_and_spinbox(self.azimuth_angle_slider, self.azimuth_angle_spinbox, 0, 360, 1, azimuth_angle_setter)
 
+        self.disable_parameter_updates = True
         self.azimuth_angle_spinbox.setValue(math_utils.degree_from_radian(self.galaxy.get_orientation().get_azimuth_angle()))
+        self.disable_parameter_updates = False
 
     # ****** Morphology adjustment ******
 
@@ -156,10 +169,13 @@ class MainWindow(QObject):
                                  *galaxy_generation.GalaxyMorphology.GUI_param_ranges[quantity_name],
                                  lambda value: self.morphology_parameter_setter_template(quantity_name, value))
 
+        self.disable_parameter_updates = True
         spinbox.setValue(self.galaxy.get_morphology().get(quantity_name))
+        self.disable_parameter_updates = False
 
     def morphology_parameter_setter_template(self, quantity_name, value):
-        self.galaxy.get_morphology().set(quantity_name, value)
+        if not self.disable_parameter_updates:
+            self.galaxy.get_morphology().set(quantity_name, value)
         self.auto_generate_galaxy_image()
 
     def setup_winding_number_adjustment(self):
@@ -183,7 +199,9 @@ class MainWindow(QObject):
         def arms_combobox_action(index):
             self.arm_angle_label.setText(self.arms_combobox.itemText(index))
             self.disable_auto_generate = True # Make sure not to recompute the image when updating the arm angle slider
+            self.disable_parameter_updates = True # Make sure not to update the morphology angle attribute, as this would be redundant
             self.arm_angle_spinbox.setValue(math_utils.degree_from_radian(self.galaxy.get_morphology().get_arm_orientation_angle(index)))
+            self.disable_parameter_updates = False
             self.disable_auto_generate = False
 
         @Slot()
@@ -211,7 +229,8 @@ class MainWindow(QObject):
         self.remove_arm_button.clicked.connect(remove_arm_button_action)
 
         def arm_orientation_setter(arm_angle):
-            self.galaxy.get_morphology().set_arm_orientation(self.arms_combobox.currentIndex(), math_utils.radian_from_degree(arm_angle))
+            if not self.disable_parameter_updates:
+                self.galaxy.get_morphology().set_arm_orientation(self.arms_combobox.currentIndex(), math_utils.radian_from_degree(arm_angle))
             self.auto_generate_galaxy_image()
 
         setup_slider_and_spinbox(self.arm_angle_slider, self.arm_angle_spinbox, 0, 360, 1, arm_orientation_setter)
@@ -263,7 +282,6 @@ class MainWindow(QObject):
         self.disk_component_parameter_control_tabs = {}
         self.disk_component_parameter_control_widgets = {}
         self.disk_component_widget_value_setters = {}
-        self.disable_disk_component_parameter_updates = False
         self.setup_disk_component_active_state_adjustment()
         self.setup_disk_component_emissive_state_adjustment()
         self.setup_disk_component_strength_scale_adjustment()
@@ -290,15 +308,14 @@ class MainWindow(QObject):
         auto_generate_was_disabled = self.disable_auto_generate
         self.disable_auto_generate = True # Make sure not to recompute the image for each widget
 
-        parameter_updates_was_disabled = self.disable_disk_component_parameter_updates
-        self.disable_disk_component_parameter_updates = not update_disk_component_parameters # We might not want to update the component class attributes automatically
+        self.disable_parameter_updates = not update_disk_component_parameters # We might not want to update the component class attributes automatically
 
         active_tab = self.disk_component_parameter_tab_widget.currentWidget().objectName()
         for name in self.disk_component_widget_value_setters:
             if name not in excluded_param_names and not (only_active_tab and self.disk_component_parameter_control_tabs[name] != active_tab):
                 self.disk_component_widget_value_setters[name](params[name])
 
-        self.disable_disk_component_parameter_updates = parameter_updates_was_disabled
+        self.disable_parameter_updates = False
 
         self.disable_auto_generate = auto_generate_was_disabled
 
@@ -428,7 +445,7 @@ class MainWindow(QObject):
 
         @Slot(int)
         def disk_component_active_checkbox_action(state):
-            if not self.disable_disk_component_parameter_updates:
+            if not self.disable_parameter_updates:
                 self.galaxy.get_disk_component(self.disk_components_combobox.currentText()).set_active(state)
             self.auto_generate_galaxy_image()
 
@@ -444,7 +461,7 @@ class MainWindow(QObject):
 
         @Slot(int)
         def disk_component_emissive_checkbox_action(state):
-            if not self.disable_disk_component_parameter_updates:
+            if not self.disable_parameter_updates:
                 self.galaxy.get_disk_component(self.disk_components_combobox.currentText()).set_emission(state)
             self.auto_generate_galaxy_image()
 
@@ -465,7 +482,7 @@ class MainWindow(QObject):
                                  logarithmic=logarithmic)
 
     def disk_component_parameter_setter_template(self, parameter_name, value):
-        if not self.disable_disk_component_parameter_updates:
+        if not self.disable_parameter_updates:
             self.galaxy.get_disk_component(self.disk_components_combobox.currentText()).set(parameter_name, value)
         self.auto_generate_galaxy_image()
 
@@ -501,7 +518,7 @@ class MainWindow(QObject):
 
         @Slot(int)
         def disk_component_number_of_octaves_spinbox_action(number):
-            if not self.disable_disk_component_parameter_updates:
+            if not self.disable_parameter_updates:
                 self.galaxy.get_disk_component(self.disk_components_combobox.currentText()).set_number_of_octaves(number)
             self.auto_generate_galaxy_image()
 
@@ -524,7 +541,7 @@ class MainWindow(QObject):
 
         @Slot(int)
         def disk_component_seed_spinbox_action(number):
-            if not self.disable_disk_component_parameter_updates:
+            if not self.disable_parameter_updates:
                 self.galaxy.get_disk_component(self.disk_components_combobox.currentText()).set_seed(number)
             self.auto_generate_galaxy_image()
 
@@ -576,7 +593,6 @@ class MainWindow(QObject):
     def setup_bulge_component_parameter_controls(self):
         self.bulge_component_parameter_control_widgets = {}
         self.bulge_component_widget_value_setters = {}
-        self.disable_bulge_component_parameter_updates = False
         self.setup_bulge_component_active_state_adjustment()
         self.setup_bulge_component_emissive_state_adjustment()
         self.setup_bulge_component_strength_scale_adjustment()
@@ -591,14 +607,13 @@ class MainWindow(QObject):
         auto_generate_was_disabled = self.disable_auto_generate
         self.disable_auto_generate = True # Make sure not to recompute the image for each widget
 
-        parameter_updates_was_disabled = self.disable_bulge_component_parameter_updates
-        self.disable_bulge_component_parameter_updates = not update_bulge_component_parameters # We might not want to update the component class attributes automatically
+        self.disable_parameter_updates = not update_bulge_component_parameters # We might not want to update the component class attributes automatically
 
         for name in self.bulge_component_widget_value_setters:
             if name not in excluded_param_names:
                 self.bulge_component_widget_value_setters[name](params[name])
 
-        self.disable_bulge_component_parameter_updates = parameter_updates_was_disabled
+        self.disable_parameter_updates = False
 
         self.disable_auto_generate = auto_generate_was_disabled
 
@@ -708,7 +723,7 @@ class MainWindow(QObject):
 
         @Slot(int)
         def bulge_component_active_checkbox_action(state):
-            if not self.disable_bulge_component_parameter_updates:
+            if not self.disable_parameter_updates:
                 self.galaxy.get_bulge_component(self.bulge_components_combobox.currentText()).set_active(state)
             self.auto_generate_galaxy_image()
 
@@ -723,7 +738,7 @@ class MainWindow(QObject):
 
         @Slot(int)
         def bulge_component_emissive_checkbox_action(state):
-            if not self.disable_bulge_component_parameter_updates:
+            if not self.disable_parameter_updates:
                 self.galaxy.get_bulge_component(self.bulge_components_combobox.currentText()).set_emission(state)
             self.auto_generate_galaxy_image()
 
@@ -743,7 +758,7 @@ class MainWindow(QObject):
                                  logarithmic=logarithmic)
 
     def bulge_component_parameter_setter_template(self, parameter_name, value):
-        if not self.disable_bulge_component_parameter_updates:
+        if not self.disable_parameter_updates:
             self.galaxy.get_bulge_component(self.bulge_components_combobox.currentText()).set(parameter_name, value)
         self.auto_generate_galaxy_image()
 
@@ -752,6 +767,56 @@ class MainWindow(QObject):
 
     def setup_bulge_component_bulge_size_adjustment(self):
         self.setup_bulge_component_slider_spinbox_adjustment('bulge_size', 'bulgeComponentBulgeSize')
+
+    # ****** Visualization control ******
+
+    def setup_visualization_control(self):
+        self.setup_visualization_intensity_control()
+
+    def setup_visualization_intensity_control(self):
+        self.gamma = 1/2
+        self.brightness = 1
+        self.max_intensity = None
+        self.setup_visualization_brightness_adjustment()
+        self.setup_visualization_gamma_adjustment()
+
+    def setup_visualization_brightness_adjustment(self):
+
+        self.brightness_slider = self.window.findChild(QSlider, 'brightnessSlider')
+        self.brightness_spinbox = self.window.findChild(QDoubleSpinBox, 'brightnessSpinBox')
+
+        def brightness_setter(value):
+            self.brightness = value
+            self.auto_generate_galaxy_image()
+
+        setup_slider_and_spinbox(self.brightness_slider, self.brightness_spinbox, 0.05, 5, 0.05, brightness_setter)
+
+        self.brightness_spinbox.setValue(self.brightness)
+
+        self.setup_fix_brightness_reference_checkbox()
+
+    def setup_fix_brightness_reference_checkbox(self):
+        self.fix_brightness_reference_checkbox = self.window.findChild(QCheckBox, 'fixBrightnessReferenceCheckBox')
+        self.fix_brightness_reference_checkbox.setChecked(False)
+
+    def setup_visualization_gamma_adjustment(self):
+
+        self.gamma_slider = self.window.findChild(QSlider, 'gammaSlider')
+        self.gamma_spinbox = self.window.findChild(QDoubleSpinBox, 'gammaSpinBox')
+
+        def gamma_setter(value):
+            self.gamma = value
+            self.auto_generate_galaxy_image()
+
+        setup_slider_and_spinbox(self.gamma_slider, self.gamma_spinbox, 0.1, 2, 0.02, gamma_setter)
+
+        self.gamma_spinbox.setValue(self.gamma)
+
+    def convert_intensity_to_image_values(self, intensity):
+        if self.max_intensity is None or not self.fix_brightness_reference_checkbox.isChecked():
+            self.max_intensity = np.max(intensity)
+        image_values = image_utils.perform_liear_stretch(intensity, 0, self.max_intensity/self.brightness)
+        return image_utils.perform_gamma_correction(image_values, self.gamma)
 
 
 def setup_slider_and_spinbox(slider, spinbox, minimum_value, maximum_value, step, value_setter, logarithmic=False):
