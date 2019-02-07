@@ -3,9 +3,10 @@
 # Author: Lars Frogner
 import numpy as np
 import matplotlib as mpl
-mpl.use('TkAgg')
+mpl.use('agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
+import image_utils
 
 
 def figure(*args, **kwargs):
@@ -59,6 +60,20 @@ def plot_image(fig, ax, values, vmin=None, vmax=None, xlabel='', ylabel='', titl
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
+
+
+def save_pure_image(output_path, values, dpi=100, gamma=1):
+    figsize = (values.shape[0]/dpi, values.shape[1]/dpi)
+    fig, ax = subplots(figsize=figsize, dpi=dpi)
+    image = values.T
+    if gamma != 1:
+        image = image_utils.perform_gamma_correction(image)
+    plot_image(fig, ax, image, colorbar=False)
+    ax.axis('off')
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+    savefig(output_path, bbox_inches='tight', pad_inches=0, dpi=dpi)
+    plt.close(fig)
 
 
 def instant_plot(*args, **kwargs):
