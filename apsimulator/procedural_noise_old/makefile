@@ -17,7 +17,7 @@ PYTHON_VERSION = 3.6
 ANACONDA_PATH = /Users/larsfrog/miniconda3
 GCC_LIBRARTY_PATH = /usr/local/Cellar/gcc/8.2.0/lib/gcc/8
 OMP_INCLUDE_PATH = ${GCC_LIBRARTY_PATH}/gcc/x86_64-apple-darwin18.2.0/8.2.0/include
-COMPILER = gcc-8
+COMPILER = g++-8
 
 LIBRARY = procedural_noise.so
 OBJECT_FILES = open-simplex-noise.o procedural_noise.o
