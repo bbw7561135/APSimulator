@@ -11,13 +11,14 @@ import image_utils
 
 class Galaxy:
 
-    def __init__(self, resolution=256, scale=1, morphology=None, orientation=None, disk_component_list=[], bulge_component_list=[]):
+    def __init__(self, resolution=256, spectrum_size=1, scale=1, morphology=None, orientation=None, disk_component_list=[], bulge_component_list=[]):
         self.set_resolution(resolution)
         self.set_scale(scale)
         self.set_morphology(morphology)
         self.set_orientation(orientation)
         self.set_disk_components(disk_component_list)
         self.set_bulge_components(bulge_component_list)
+        self.set_spectrum_size(spectrum_size)
 
     def set_resolution(self, resolution):
         self.resolution = int(resolution)
@@ -25,6 +26,12 @@ class Galaxy:
         self.size_y = self.resolution
         self.size_z = self.resolution
         self.shape = (self.size_x, self.size_y, self.size_z)
+
+    def set_spectrum_size(self, spectrum_size):
+        self.spectrum_size = int(spectrum_size)
+        assert self.spectrum_size > 0
+        self.sync_disk_component_spectrum_sizes()
+        self.sync_bulge_component_spectrum_sizes()
 
     def set_scale(self, scale):
         self.scale = float(scale)
@@ -44,6 +51,7 @@ class Galaxy:
         assert self.no_equal_elements(labels)
         self.disk_components = {label: component for label, component in zip(labels, disk_component_list)}
         self.number_of_disk_components = len(disk_component_list)
+        self.sync_disk_component_spectrum_sizes()
 
     def set_bulge_components(self, bulge_component_list):
         bulge_component_list = list(bulge_component_list)
@@ -52,18 +60,31 @@ class Galaxy:
         assert self.no_equal_elements(labels)
         self.bulge_components = {label: component for label, component in zip(labels, bulge_component_list)}
         self.number_of_bulge_components = len(bulge_component_list)
+        self.sync_bulge_component_spectrum_sizes()
 
     def set_disk_component(self, component_label, new_disk_component):
         assert self.has_disk_component(component_label)
         assert isinstance(disk_component, GalaxyDiskComponent)
         new_disk_component.set_label(component_label)
         self.disk_components[component_label] = new_disk_component
+        self.sync_component_spectrum_size(new_disk_component)
 
     def set_bulge_component(self, component_label, new_bulge_component):
         assert self.has_bulge_component(component_label)
         assert isinstance(bulge_component, GalaxyBulgeComponent)
         new_bulge_component.set_label(component_label)
         self.bulge_components[component_label] = new_bulge_component
+        self.sync_component_spectrum_size(new_bulge_component)
+
+    def set_disk_component_spectral_weights(self, component_label, spectral_weights):
+        assert self.has_disk_component(component_label)
+        assert len(spectral_weights) == self.spectrum_size
+        self.disk_components[component_label].set_spectral_weights(spectral_weights)
+
+    def set_bulge_component_spectral_weights(self, component_label, spectral_weights):
+        assert self.has_bulge_component(component_label)
+        assert len(spectral_weights) == self.spectrum_size
+        self.bulge_components[component_label].set_spectral_weights(spectral_weights)
 
     def add_disk_component(self, disk_component):
         assert isinstance(disk_component, GalaxyDiskComponent)
@@ -71,6 +92,7 @@ class Galaxy:
         assert not self.has_disk_component(label)
         self.disk_components[label] = disk_component
         self.number_of_disk_components += 1
+        self.sync_component_spectrum_size(disk_component)
 
     def add_bulge_component(self, bulge_component):
         assert isinstance(bulge_component, GalaxyBulgeComponent)
@@ -78,6 +100,7 @@ class Galaxy:
         assert not self.has_bulge_component(label)
         self.bulge_components[label] = bulge_component
         self.number_of_bulge_components += 1
+        self.sync_component_spectrum_size(bulge_component)
 
     def remove_disk_component(self, component_label):
         removed_component = self.disk_components.pop(component_label, None)
@@ -102,6 +125,17 @@ class Galaxy:
         bulge_component = self.bulge_components.pop(old_component_label)
         bulge_component.set_label(new_component_label)
         self.bulge_components[new_component_label] = bulge_component
+
+    def sync_component_spectrum_size(self, component):
+        component.set_spectrum_size(self.spectrum_size)
+
+    def sync_disk_component_spectrum_sizes(self):
+        for disk_component in self.disk_components.values():
+            self.sync_component_spectrum_size(disk_component)
+
+    def sync_bulge_component_spectrum_sizes(self):
+        for bulge_component in self.bulge_components.values():
+            self.sync_component_spectrum_size(bulge_component)
 
     def areinstances(self, instances, class_name):
         return len(list(filter(lambda instance: not isinstance(instance, class_name), instances))) == 0
@@ -128,16 +162,17 @@ class Galaxy:
         return self.compute_intensity_from_emission_and_attenuation(*self.compute_emission_and_attenuation())
 
     def compute_intensity_from_emission_and_attenuation(self, emission, attenuation):
-        transparency = np.exp(-np.cumsum(attenuation[:, :, ::-1], axis=2)*self.dz)
-        intensity = np.sum(emission[:, :, ::-1]*transparency, axis=2)*self.dz
+        transparency = np.exp(-np.cumsum(attenuation[:, :, :, ::-1], axis=3)*self.dz)
+        intensity = np.sum(emission[:, :, :, ::-1]*transparency, axis=3)*self.dz
         return intensity
 
     def compute_emission_and_attenuation(self):
 
         self.compute_coordinates()
 
-        total_emission = np.zeros(self.shape, dtype='float32')
-        total_attenuation = np.zeros(self.shape, dtype='float32')
+        full_shape = (self.spectrum_size, *self.shape)
+        total_emission = np.zeros(full_shape, dtype='float32')
+        total_attenuation = np.zeros(full_shape, dtype='float32')
 
         self.add_disk_emission_and_attenuation(total_emission, total_attenuation)
         self.add_bulge_emission_and_attenuation(total_emission, total_attenuation)
@@ -161,11 +196,13 @@ class Galaxy:
         y_coordinates_inside = self.y_coordinates[y_idx_range[0]:y_idx_range[1]]
         z_coordinates_inside = self.z_coordinates[z_idx_range[0]:z_idx_range[1]]
 
-        nonzero_emission = total_emission[x_idx_range[0]:x_idx_range[1],
+        nonzero_emission = total_emission[:,
+                                          x_idx_range[0]:x_idx_range[1],
                                           y_idx_range[0]:y_idx_range[1],
                                           z_idx_range[0]:z_idx_range[1]]
 
-        nonzero_attenuation = total_attenuation[x_idx_range[0]:x_idx_range[1],
+        nonzero_attenuation = total_attenuation[:,
+                                                x_idx_range[0]:x_idx_range[1],
                                                 y_idx_range[0]:y_idx_range[1],
                                                 z_idx_range[0]:z_idx_range[1]]
 
@@ -176,15 +213,22 @@ class Galaxy:
         unoriented_arm_center_angles = self.morphology.compute_unoriented_arm_center_angles(radii)
 
         for disk_component in self.disk_components.values():
+
             if disk_component.is_active():
+
                 strength = disk_component.compute_strength(self.morphology, self.orientation,
                                                            x_coordinates_inside, y_coordinates_inside, z_coordinates_inside,
                                                            azimuth_angles, radii, heights,
                                                            unoriented_arm_center_angles)
+
+                spectral_weights = disk_component.get_spectral_weights()
+
                 if disk_component.is_emissive():
-                    nonzero_emission[:] += strength
+                    for i in range(self.spectrum_size):
+                        nonzero_emission[i, :, :, :] += strength*spectral_weights[i]
                 else:
-                    nonzero_attenuation[:] += strength
+                    for i in range(self.spectrum_size):
+                        nonzero_attenuation[i, :, :, :] += strength*spectral_weights[i]
 
     def add_bulge_emission_and_attenuation(self, total_emission, total_attenuation):
 
@@ -194,12 +238,18 @@ class Galaxy:
         radii = self.orientation.compute_spherical_radii(self.x_coordinates, self.y_coordinates, self.z_coordinates)
 
         for bulge_component in self.bulge_components.values():
+
             if bulge_component.is_active():
+
                 strength = bulge_component.compute_strength(radii)
+                spectral_weights = bulge_component.get_spectral_weights()
+
                 if bulge_component.is_emissive():
-                    total_emission[:] += strength
+                    for i in range(self.spectrum_size):
+                        total_emission[i, :, :, :] += strength*spectral_weights[i]
                 else:
-                    total_attenuation[:] += strength
+                    for i in range(self.spectrum_size):
+                        total_attenuation[i, :, :, :] += strength*spectral_weights[i]
 
     def get_resolution(self):
         return self.resolution
@@ -526,6 +576,7 @@ class GalaxyBulgeComponent:
     def __init__(self, label, **kwargs):
 
         self.initialize_setter_getter_dicts()
+        self.initialize_spectral_weights()
 
         self.set_label(label)
 
@@ -545,7 +596,13 @@ class GalaxyBulgeComponent:
                         'active': self.is_active,
                         'emissive': self.is_emissive,
                         'strength_scale': self.get_strength_scale,
-                        'bulge_size': self.get_bulge_size}
+                        'bulge_size': self.get_bulge_size,
+                        'spectrum_size': self.get_spectrum_size,
+                        'spectral_weights': self.get_spectral_weights}
+
+    def initialize_spectral_weights(self):
+        self.spectrum_size = 1
+        self.spectral_weights = np.array([1], dtype='float32')
 
     def reset_params_to_default(self):
         self.set_params(self.__class__.get_default_params())
@@ -577,6 +634,24 @@ class GalaxyBulgeComponent:
     def set_bulge_size(self, bulge_size):
         self.params['bulge_size'] = float(bulge_size)
 
+    def set_spectrum_size(self, spectrum_size):
+        old_spectrum_size = self.spectrum_size
+        self.spectrum_size = int(spectrum_size)
+        assert self.spectrum_size > 0
+
+        if self.spectrum_size > old_spectrum_size:
+            new_spectral_weights = np.ones(self.spectrum_size, dtype='float32')
+            new_spectral_weights[:old_spectrum_size] = self.spectral_weights
+            self.spectral_weights = new_spectral_weights
+        elif self.spectrum_size < old_spectrum_size:
+            self.spectral_weights = self.spectral_weights[:self.spectrum_size]
+
+    def set_spectral_weights(self, spectral_weights):
+        spectral_weights_array = np.asfarray(spectral_weights)
+        assert spectral_weights_array.ndim == 1
+        max_idx = min(self.spectrum_size, spectral_weights_array.size)
+        self.spectral_weights[:max_idx] = spectral_weights_array[:max_idx]
+
     def compute_strength(self, radii):
         r = (radii + 1e-2)/self.get_bulge_size()
         return self.get_strength_scale()/(r**0.855*np.exp(r**0.25))
@@ -599,12 +674,18 @@ class GalaxyBulgeComponent:
     def get_bulge_size(self):
         return self.params['bulge_size']
 
+    def get_spectrum_size(self):
+        return self.spectrum_size
+
+    def get_spectral_weights(self):
+        return self.spectral_weights
+
     @staticmethod
     def get_default_params():
-        return {'active':         True,
-                'emissive':       True,
-                'strength_scale': 2,
-                'bulge_size':     0.03}
+        return {'active':           True,
+                'emissive':         True,
+                'strength_scale':   2,
+                'bulge_size':       0.03}
 
     GUI_param_ranges = {'strength_scale': (0.01, 100, 1),
                         'bulge_size': (0.001, 0.1, 0.001)}
@@ -615,6 +696,7 @@ class GalaxyDiskComponent:
     def __init__(self, label, **kwargs):
 
         self.initialize_setter_getter_dicts()
+        self.initialize_spectral_weights()
 
         self.set_label(label)
 
@@ -659,7 +741,13 @@ class GalaxyDiskComponent:
                         'noise_threshold': self.get_noise_threshold,
                         'noise_cutoff': self.get_noise_cutoff,
                         'noise_exponent': self.get_noise_exponent,
-                        'noise_offset': self.get_noise_offset}
+                        'noise_offset': self.get_noise_offset,
+                        'spectrum_size': self.get_spectrum_size,
+                        'spectral_weights': self.get_spectral_weights}
+
+    def initialize_spectral_weights(self):
+        self.spectrum_size = 1
+        self.spectral_weights = np.array([1], dtype='float32')
 
     def reset_params_to_default(self):
         self.set_params(self.__class__.get_default_params())
@@ -731,6 +819,24 @@ class GalaxyDiskComponent:
 
     def set_noise_offset(self, noise_offset):
         self.params['noise_offset'] = float(noise_offset)
+
+    def set_spectrum_size(self, spectrum_size):
+        old_spectrum_size = self.spectrum_size
+        self.spectrum_size = int(spectrum_size)
+        assert self.spectrum_size > 0
+
+        if self.spectrum_size > old_spectrum_size:
+            new_spectral_weights = np.ones(self.spectrum_size, dtype='float32')
+            new_spectral_weights[:old_spectrum_size] = self.spectral_weights
+            self.spectral_weights = new_spectral_weights
+        elif self.spectrum_size < old_spectrum_size:
+            self.spectral_weights = self.spectral_weights[:self.spectrum_size]
+
+    def set_spectral_weights(self, spectral_weights):
+        spectral_weights_array = np.asfarray(spectral_weights)
+        assert spectral_weights_array.ndim == 1
+        max_idx = min(self.spectrum_size, spectral_weights_array.size)
+        self.spectral_weights[:max_idx] = spectral_weights_array[:max_idx]
 
     def compute_strength(self, morphology, orientation,
                                x_coordinates, y_coordinates, z_coordinates,
@@ -844,6 +950,12 @@ class GalaxyDiskComponent:
 
     def get_noise_offset(self):
         return self.params['noise_offset']
+
+    def get_spectrum_size(self):
+        return self.spectrum_size
+
+    def get_spectral_weights(self):
+        return self.spectral_weights
 
     @staticmethod
     def get_max_seed():
