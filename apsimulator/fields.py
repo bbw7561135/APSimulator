@@ -249,7 +249,7 @@ class Regular2DField:
     def get_window_view_of_array(self, values):
         assert values.shape == self.shape
         window = self.grid.window
-        return values[window.y.start:window.y.end, window.x.start:window.x.end]
+        return values[window.x.start:window.x.end, window.y.start:window.y.end]
 
     def get_values_inside_window(self):
         return self.get_window_view_of_array(self.values)
@@ -297,7 +297,7 @@ class SpectralField(Regular2DField):
     def get_window_view_of_array(self, values):
         assert values.shape == self.shape
         window = self.grid.window
-        return values[:, window.y.start:window.y.end, window.x.start:window.x.end]
+        return values[:, window.x.start:window.x.end, window.y.start:window.y.end]
 
 
 class FilteredSpectralField(SpectralField):

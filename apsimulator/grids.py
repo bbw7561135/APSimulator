@@ -16,7 +16,7 @@ class IndexRange2D:
         self.y = IndexRange(y_start, y_end)
         self.size_x = x_end - x_start
         self.size_y = y_end - y_start
-        self.shape = (self.size_y, self.size_x)
+        self.shape = (self.size_x, self.size_y)
 
 
 class Regular2DGrid:
@@ -51,8 +51,8 @@ class Regular2DGrid:
     def initialize_coordinates(self):
         self.x_coordinates = self.cell_numbers_x*self.cell_extent_x
         self.y_coordinates = self.cell_numbers_y*self.cell_extent_y
-        self.x_coordinate_mesh, self.y_coordinate_mesh = np.meshgrid(self.x_coordinates, self.y_coordinates, indexing='xy', copy=False)
-        self.shape = (self.size_y, self.size_x)
+        self.x_coordinate_mesh, self.y_coordinate_mesh = np.meshgrid(self.x_coordinates, self.y_coordinates, indexing='ij')
+        self.shape = (self.size_x, self.size_y)
 
     def initialize_window(self):
         '''
@@ -128,10 +128,10 @@ class Regular2DGrid:
         return self.x_coordinate_mesh, self.y_coordinate_mesh
 
     def get_coordinate_meshes_within_window(self):
-        return self.x_coordinate_mesh[self.window.y.start:self.window.y.end,
-                                      self.window.x.start:self.window.x.end], \
-               self.y_coordinate_mesh[self.window.y.start:self.window.y.end,
-                                      self.window.x.start:self.window.x.end]
+        return self.x_coordinate_mesh[self.window.x.start:self.window.x.end,
+                                      self.window.y.start:self.window.y.end], \
+               self.y_coordinate_mesh[self.window.x.start:self.window.x.end,
+                                      self.window.y.start:self.window.y.end]
 
     def get_window_bounds(self):
         return self.get_bounds(x_index_range=(self.window.x.start, self.window.x.end),

@@ -137,7 +137,7 @@ class AveragedKolmogorovTurbulence(KolmogorovTurbulence, field_processing.FieldP
             psf_size = self.determine_optimal_psf_size()
             x_index_range = (self.grid.size_x//2 - psf_size//2, self.grid.size_x//2 + psf_size//2)
             y_index_range = (self.grid.size_y//2 - psf_size//2, self.grid.size_y//2 + psf_size//2)
-            point_spread_function = point_spread_function[:, y_index_range[0]:y_index_range[1], x_index_range[0]:x_index_range[1]]
+            point_spread_function = point_spread_function[:, x_index_range[0]:x_index_range[1], y_index_range[0]:y_index_range[1]]
 
         return point_spread_function
 
@@ -180,9 +180,9 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         '''
         self.initialize_phase_screen()
 
-    def initialize_phase_screen(self,  width_doublings=0):
+    def initialize_phase_screen(self,  height_doublings=0):
 
-        self.setup_phase_screen_grid(width_doublings)
+        self.setup_phase_screen_grid(height_doublings)
 
         # Precompute constant quantities for use with the filter functions
         self.compute_filter_function_constants()
@@ -199,15 +199,15 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
 
         self.aperture_shift = 0
 
-    def setup_phase_screen_grid(self, width_doublings):
+    def setup_phase_screen_grid(self, height_doublings):
 
         max_window_size = max(self.grid.window.shape)
 
-        grid_size_exponent_y = math_utils.nearest_higher_power_of_2_exponent(max_window_size)
-        normalized_screen_extent_y = self.grid.cell_extent_y*2**grid_size_exponent_y
-
-        grid_size_exponent_x = grid_size_exponent_y + int(width_doublings)
+        grid_size_exponent_x = math_utils.nearest_higher_power_of_2_exponent(max_window_size)
         normalized_screen_extent_x = self.grid.cell_extent_x*2**grid_size_exponent_x
+
+        grid_size_exponent_y = grid_size_exponent_x + int(height_doublings)
+        normalized_screen_extent_y = self.grid.cell_extent_y*2**grid_size_exponent_y
 
         self.screen_grid = grids.FFTGrid(grid_size_exponent_x, grid_size_exponent_y,
                                          normalized_screen_extent_x, normalized_screen_extent_y,
@@ -234,16 +234,16 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
             # in the computation of the low-frequency phase perturbations
 
             unit_x_mesh, unit_y_mesh = np.meshgrid(np.arange(self.screen_grid.size_x)/self.screen_grid.size_x,
-                                                   np.arange(self.screen_grid.size_y)/self.screen_grid.size_y, indexing='xy')
+                                                   np.arange(self.screen_grid.size_y)/self.screen_grid.size_y, indexing='ij')
 
-            subharmonic_index_x_mesh, subharmonic_index_y_mesh = np.meshgrid(self.subharmonic_indices, self.subharmonic_indices, indexing='xy')
+            subharmonic_index_x_mesh, subharmonic_index_y_mesh = np.meshgrid(self.subharmonic_indices, self.subharmonic_indices, indexing='ij')
 
             unscaled_subharmonic_phase_shifts = np.multiply.outer(2*np.pi*subharmonic_index_x_mesh, unit_x_mesh) + \
                                                 np.multiply.outer(2*np.pi*subharmonic_index_y_mesh, unit_y_mesh)
 
             subharmonic_phase_shifts = np.multiply.outer(self.subharmonic_level_scales, unscaled_subharmonic_phase_shifts)
 
-            self.subharmonic_phases = np.cos(subharmonic_phase_shifts) + 1j*np.sin(subharmonic_phase_shifts) # Shape: (n_subharmonic_levels, 6, 6, n_grid_cells_y, n_grid_cells_x)
+            self.subharmonic_phases = np.cos(subharmonic_phase_shifts) + 1j*np.sin(subharmonic_phase_shifts) # Shape: (n_subharmonic_levels, 6, 6, n_grid_cells_x, n_grid_cells_y)
 
     def compute_filter_functions(self):
         '''
@@ -253,23 +253,23 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         '''
         normalized_x_frequencies = self.screen_grid.cell_numbers_x/self.screen_grid.extent_x
         normalized_y_frequencies = self.screen_grid.cell_numbers_y/self.screen_grid.extent_y
-        normalized_x_frequency_mesh, normalized_y_frequency_mesh = np.meshgrid(normalized_x_frequencies, normalized_y_frequencies, indexing='xy')
+        normalized_x_frequency_mesh, normalized_y_frequency_mesh = np.meshgrid(normalized_x_frequencies, normalized_y_frequencies, indexing='ij')
 
         normalized_distance_frequencies_squared = normalized_x_frequency_mesh**2 + normalized_y_frequency_mesh**2
-        normalized_distance_frequencies_squared[self.screen_grid.shift_y, self.screen_grid.shift_x] = 1 # Mask zero frequency to avoid division by zero
+        normalized_distance_frequencies_squared[self.screen_grid.shift_x, self.screen_grid.shift_y] = 1 # Mask zero frequency to avoid division by zero
 
         distance_frequencies_squared = np.multiply.outer(self.inverse_wavelengths_squared, normalized_distance_frequencies_squared)
 
         filter_functions = self.filter_function_scale*self.inverse_wavelengths_squared[:, np.newaxis, np.newaxis]/(distance_frequencies_squared + self.outer_scale_frequency_squared)**(11/12)
-        filter_functions[:, self.screen_grid.shift_y, self.screen_grid.shift_x] = 0 # Average phase perturbation (corresponds to zero frequency) should be zero
+        filter_functions[:, self.screen_grid.shift_x, self.screen_grid.shift_y] = 0 # Average phase perturbation (corresponds to zero frequency) should be zero
 
         # Scale to account for overlap of subharmonic grid
         if self.n_subharmonic_levels > 0:
             for offset in [-1, 1]:
-                filter_functions[:, self.screen_grid.shift_y + offset, self.screen_grid.shift_x]          *= 0.5
-                filter_functions[:, self.screen_grid.shift_y,          self.screen_grid.shift_x + offset] *= 0.5
-                filter_functions[:, self.screen_grid.shift_y + offset, self.screen_grid.shift_x + offset] *= 0.75
-                filter_functions[:, self.screen_grid.shift_y + offset, self.screen_grid.shift_x - offset] *= 0.75
+                filter_functions[:, self.screen_grid.shift_x + offset, self.screen_grid.shift_y]          *= 0.5
+                filter_functions[:, self.screen_grid.shift_x,          self.screen_grid.shift_y + offset] *= 0.5
+                filter_functions[:, self.screen_grid.shift_x + offset, self.screen_grid.shift_y + offset] *= 0.75
+                filter_functions[:, self.screen_grid.shift_x + offset, self.screen_grid.shift_y - offset] *= 0.75
 
         return filter_functions
 
@@ -284,7 +284,7 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
 
         unscaled_normalized_x_frequency_mesh, \
             unscaled_normalized_y_frequency_mesh = np.meshgrid(unscaled_normalized_x_frequencies,
-                                                               unscaled_normalized_y_frequencies, indexing='xy')
+                                                               unscaled_normalized_y_frequencies, indexing='ij')
 
         unscaled_normalized_distance_frequencies_squared = unscaled_normalized_x_frequency_mesh**2 + unscaled_normalized_y_frequency_mesh**2
 
@@ -308,10 +308,10 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         Generates a random phase screen by modulating complex white noise with the Kolmogorov filtering
         function and taking the inverse Fourier transform.
         '''
-        noise = self.generate_white_noise((self.screen_grid.size_y, self.screen_grid.size_x))
+        noise = self.generate_white_noise((self.screen_grid.size_x, self.screen_grid.size_y))
         return self.screen_grid.get_total_size()*np.fft.ifft2(np.fft.ifftshift(noise[np.newaxis, :, :]*self.filter_functions,
-                                                                                   axes=(1, 2)),
-                                                                  axes=(1, 2)).real
+                                                                               axes=(1, 2)),
+                                                              axes=(1, 2)).real
 
     def generate_low_frequency_phase_perturbations(self):
         '''
@@ -338,13 +338,13 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         '''
         Returns a view into the part of the phase screen canvas currently covering the aperture window.
         '''
-        return self.phase_screen_canvas[:, :self.grid.window.size_y, self.aperture_shift:self.aperture_shift+self.grid.window.size_x]
+        return self.phase_screen_canvas[:, :self.grid.window.size_x, self.aperture_shift:self.aperture_shift+self.grid.window.size_y]
 
     def get_monochromatic_phase_screen_covering_aperture(self, wavelength_idx):
         '''
         Like get_phase_screen_covering_aperture, but only returns the screen for a given wavelength index.
         '''
-        return self.phase_screen_canvas[wavelength_idx, :self.grid.window.size_y, self.aperture_shift:self.aperture_shift+self.grid.window.size_x]
+        return self.phase_screen_canvas[wavelength_idx, :self.grid.window.size_x, self.aperture_shift:self.aperture_shift+self.grid.window.size_y]
 
     def compute_perturbation_field(self):
         '''
@@ -359,8 +359,8 @@ class KolmogorovPhaseScreen(KolmogorovTurbulence, field_processing.Multiplicativ
         components.
         '''
         return self.screen_grid.get_total_size()*np.fft.ifft2(np.fft.ifftshift(self.filter_functions**2,
-                                                                                   axes=(1, 2)),
-                                                                  axes=(1, 2)).real
+                                                                               axes=(1, 2)),
+                                                              axes=(1, 2)).real
 
     def compute_low_frequency_autocorrelation(self):
         '''
@@ -412,7 +412,7 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         '''
         Implements the FieldProcessor method called after recieveing the properties of the aperture field.
         '''
-        self.initialize_phase_screen(width_doublings=1)
+        self.initialize_phase_screen(height_doublings=1)
 
     def compute_temporal_quantities(self):
 
@@ -423,48 +423,48 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         self.normalized_wind_speed = self.wind_speed/self.reference_wavelength
 
         # Speed with which to move the normalized grid across the aperture [grid cells/s]
-        self.grid_speed = self.normalized_wind_speed/self.grid.cell_extent_x
+        self.grid_speed = self.normalized_wind_speed/self.grid.cell_extent_y
 
         # Time steps smaller than this will not give improved time resolution
-        self.min_time_step = self.grid.cell_extent_x/self.normalized_wind_speed
+        self.min_time_step = self.grid.cell_extent_y/self.normalized_wind_speed
 
         # Time for a point on the normalized grid to traverse the aperture [s]
-        self.aperture_crossing_duration = self.grid.window.size_x*self.grid.cell_extent_x/self.normalized_wind_speed
+        self.aperture_crossing_duration = self.grid.window.size_y*self.grid.cell_extent_y/self.normalized_wind_speed
 
         # Elapsed time [s]
         self.time = 0
 
     def compute_tapering_function(self):
         '''
-        Computes sine function that can be used to taper the edges of phase screens in the x-direction.
+        Computes sine function that can be used to taper the edges of phase screens in the y-direction.
         Two tapered phase screens can then be overlapped to produce a longer phase screen while still
         maintaining the correct statistics in the overlapping region.
         '''
-        return np.sin(np.pi*np.arange(self.screen_grid.size_x)/(self.screen_grid.size_x-1))[np.newaxis, np.newaxis, :]
+        return np.sin(np.pi*np.arange(self.screen_grid.size_y)/(self.screen_grid.size_y-1))[np.newaxis, np.newaxis, :]
 
     def setup_phase_screen_canvas(self):
         '''
-        Creates an array ("canvas") for storing a phase screen, with additional room in the x-direction
+        Creates an array ("canvas") for storing a phase screen, with additional room in the y-direction
         for adding a new phase screen with overlap.
         '''
 
-        # Create canvas that fits 1.5 phase screens in width
-        self.phase_screen_canvas = np.zeros((self.n_wavelengths, self.n_screen_grid_cells_y, self.screen_grid.shift_x*3))
+        # Create canvas that fits 1.5 phase screens in height
+        self.phase_screen_canvas = np.zeros((self.n_wavelengths, self.n_screen_grid_cells_x, self.screen_grid.shift_y*3))
 
-        # Insert the first phase screen into the leftmost two thirds of the canvas
-        self.phase_screen_canvas[:, :, :self.screen_grid.size_x] = next(self.phase_screen_generator)
+        # Insert the first phase screen into the lower two thirds of the canvas
+        self.phase_screen_canvas[:, :, :self.screen_grid.size_y] = next(self.phase_screen_generator)
 
-        # Scale the initial phase screen so that it tapers off to the right
-        self.phase_screen_canvas[:, :, self.screen_grid.shift_x:self.screen_grid.shift_x*2] *= self.tapering_function[:, :, self.screen_grid.shift_x:]
+        # Scale the initial phase screen so that it tapers off towards the top
+        self.phase_screen_canvas[:, :, self.screen_grid.shift_y:self.screen_grid.shift_y*2] *= self.tapering_function[:, :, self.screen_grid.shift_y:]
 
-        # Generate the next phase screen, taper it in both ends and add to the rightmost two thirds of the canvas,
+        # Generate the next phase screen, taper it in both ends and add to the upper two thirds of the canvas,
         # merging with the initial phase screen in the middle
-        self.phase_screen_canvas[:, :, self.screen_grid.shift_x:] += next(self.phase_screen_generator)*self.tapering_function
+        self.phase_screen_canvas[:, :, self.screen_grid.shift_y:] += next(self.phase_screen_generator)*self.tapering_function
 
     def move_phase_screen(self, time_step):
         '''
-        Emulates movement of the phase screen across the aperture in the x-direction. An index for the aperture window
-        into the canvas is updated according to the wind speed. When the rightmost end of the aperture window crosses
+        Emulates movement of the phase screen across the aperture in the y-direction. An index for the aperture window
+        into the canvas is updated according to the wind speed. When the upper end of the aperture window crosses
         the middle of the canvas, the content of the canvas is shifted to put the aperture window at the beginning
         again and a new phase screen is spliced to the end of the old one.
         '''
@@ -480,23 +480,23 @@ class MovingKolmogorovPhaseScreen(KolmogorovPhaseScreen):
         self.time += time_step
 
         # Handle shifting past the middle of the canvas
-        if self.aperture_shift + self.grid.window.size_x >= 2*self.screen_grid.shift_x:
+        if self.aperture_shift + self.grid.window.size_y >= 2*self.screen_grid.shift_y:
 
             # Generate an empty canvas
             new_phase_screen_canvas = np.zeros(self.phase_screen_canvas.shape)
 
-            # Insert the phase screen occupying the rightmost two thirds of the old canvas into the leftmost two thirds of the new canvas
-            new_phase_screen_canvas[:, :, :self.screen_grid.shift_x*2] = self.phase_screen_canvas[:, :, self.screen_grid.shift_x:]
+            # Insert the phase screen occupying the upper two thirds of the old canvas into the lower two thirds of the new canvas
+            new_phase_screen_canvas[:, :, :self.screen_grid.shift_y*2] = self.phase_screen_canvas[:, :, self.screen_grid.shift_y:]
 
-            # Generate the next phase screen, taper it in both ends and add to the rightmost two thirds of the canvas,
+            # Generate the next phase screen, taper it in both ends and add to the upper two thirds of the canvas,
             # merging with the existing phase screen in the middle
-            new_phase_screen_canvas[:, :, self.screen_grid.shift_x:] += next(self.phase_screen_generator)*self.tapering_function
+            new_phase_screen_canvas[:, :, self.screen_grid.shift_y:] += next(self.phase_screen_generator)*self.tapering_function
 
             # Use the new canvas
             self.phase_screen_canvas = new_phase_screen_canvas
 
             # Move aperture back one third of the canvas
-            self.aperture_shift -= self.screen_grid.shift_x
+            self.aperture_shift -= self.screen_grid.shift_y
 
     def get_coherence_time(self):
         return self.coherence_time
