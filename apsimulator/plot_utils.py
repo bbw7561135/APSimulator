@@ -62,9 +62,12 @@ def plot_image(fig, ax, values, vmin=None, vmax=None, xlabel='', ylabel='', titl
 
 
 def save_pure_image(output_path, values, dpi=100):
-    figsize = (values.shape[0]/dpi, values.shape[1]/dpi)
+    figsize = (values.shape[-2]/dpi, values.shape[-1]/dpi)
     fig, ax = subplots(figsize=figsize, dpi=dpi)
-    image = values.T
+    if values.ndim == 3:
+        image = np.moveaxis(values, (0, 1), (2, 1))
+    else:
+        image = values.T
     plot_image(fig, ax, image, vmin=0, vmax=1, colorbar=False)
     ax.axis('off')
     ax.get_xaxis().set_visible(False)
