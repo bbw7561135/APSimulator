@@ -2,15 +2,16 @@ import sys
 import os
 import numpy as np
 from PySide2.QtUiTools import QUiLoader
-from PySide2.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QDoubleSpinBox, QSpinBox, QComboBox, QCheckBox, QLineEdit, QTabWidget
+from PySide2.QtWidgets import QApplication, QLabel, QPushButton, QSlider, QDoubleSpinBox, QSpinBox, QComboBox, QCheckBox, QLineEdit, QTabWidget, QRadioButton, QStackedWidget
 from PySide2.QtCore import Signal, Slot, QFile, QObject, Qt
-from PySide2.QtGui import QPixmap
+from PySide2.QtGui import QPixmap, QColor
 sys.path.insert(0, os.path.join('..', 'apsimulator'))
 import galaxy_generation
 import math_utils
 import parallel_utils
 import image_utils
 import plot_utils
+import spectrum_utils
 
 
 class MainWindow(QObject):
@@ -49,7 +50,7 @@ class MainWindow(QObject):
     # ****** Galaxy generation ******
 
     def initialize_galaxy(self):
-        self.galaxy = galaxy_generation.Galaxy()
+        self.galaxy = galaxy_generation.Galaxy(spectrum_size=3)
 
     def setup_galaxy_frame(self):
         self.galaxy_frame_label = self.window.findChild(QLabel, 'galaxyFrameLabel')
@@ -104,6 +105,8 @@ class MainWindow(QObject):
         self.generate_button.clicked.connect(generate_button_action)
 
     def generate_galaxy_image(self):
+        self.update_disk_component_colors()
+        self.update_bulge_component_colors()
         image_path = os.path.join(os.getcwd(), 'galaxy.png')
         image_values = self.convert_intensity_to_image_values(self.galaxy.compute_intensity())
         plot_utils.save_pure_image(image_path, image_values)
@@ -271,7 +274,9 @@ class MainWindow(QObject):
     def setup_disk_component_selection(self):
         self.disk_component_types = galaxy_generation.GalaxyDiskComponent.get_component_types()
         self.disk_component_labels = {component_type: [] for component_type in self.disk_component_types}
+        self.disk_component_colors = {}
         self.setup_reset_disk_component_parameters_button()
+        self.setup_disk_component_colors_combobox()
         self.setup_disk_components_combobox()
         self.setup_disk_component_type_combobox()
         self.setup_new_disk_component_button()
@@ -292,7 +297,7 @@ class MainWindow(QObject):
         self.setup_disk_component_seed_adjustment()
         self.setup_disk_component_number_of_octaves_adjustment()
         self.setup_disk_component_initial_frequency_adjustment()
-        self.setup_disk_component_lacunarity_adjustment()
+        #self.setup_disk_component_lacunarity_adjustment()
         self.setup_disk_component_persistence_adjustment()
         self.setup_disk_component_noise_threshold_adjustment()
         self.setup_disk_component_noise_cutoff_adjustment()
@@ -350,6 +355,8 @@ class MainWindow(QObject):
                 # Update widget values, but make sure the setters don't update the component class attributes, which would be redundant
                 self.update_disk_component_parameter_control_widget_values(disk_component.get_params(), update_disk_component_parameters=False)
 
+                self.disk_component_colors_combobox.setCurrentIndex(self.disk_component_colors_combobox.findText(self.disk_component_colors[component_label]))
+
         self.disk_components_combobox.currentIndexChanged.connect(disk_components_combobox_action)
         self.set_disk_component_parameter_control_widget_enabled_states(False) # Controls are disabled initially
 
@@ -368,6 +375,7 @@ class MainWindow(QObject):
                 component_label = component_label[:-1] + str(int(component_label[-1]) + 1)
 
             self.disk_component_labels[component_type_name].append(component_label)
+            self.disk_component_colors[component_label] = 'Default'
             self.galaxy.add_disk_component(self.disk_component_types[component_type_name](component_label))
             self.disk_components_combobox.addItem(component_label)
             self.disk_components_combobox.setCurrentIndex(len(self.disk_component_labels[component_type_name])-1)
@@ -387,6 +395,7 @@ class MainWindow(QObject):
                 return
             component_label = self.disk_components_combobox.currentText()
             self.disk_component_labels[component_type_name].remove(component_label)
+            self.disk_component_colors.pop(component_label)
             self.galaxy.remove_disk_component(component_label)
             self.disk_components_combobox.removeItem(self.disk_components_combobox.currentIndex())
             self.auto_generate_galaxy_image()
@@ -406,11 +415,14 @@ class MainWindow(QObject):
             new_component_label = self.disk_component_name_line_edit.text()
             if len(new_component_label.strip()) == 0: # Skip updating if the line edit is empty
                 return
+            if len(self.disk_component_labels[component_type_name]) == 0: # Skip updating if no disk components are shown
+                return
             all_component_labels = [item for sublist in self.disk_component_labels.values() for item in sublist]
             if new_component_label in all_component_labels: # Skip updating if the new label already exists
                 return
             component_index = self.disk_component_labels[component_type_name].index(current_component_label)
             self.disk_component_labels[component_type_name][component_index] = new_component_label
+            self.disk_component_colors[new_component_label] = self.disk_component_colors.pop(current_component_label)
             self.galaxy.set_disk_component_label(current_component_label, new_component_label)
             self.disk_components_combobox.setItemText(self.disk_components_combobox.currentIndex(), new_component_label)
 
@@ -450,6 +462,26 @@ class MainWindow(QObject):
             self.auto_generate_galaxy_image()
 
         self.disk_component_active_checkbox.stateChanged.connect(disk_component_active_checkbox_action)
+
+    def update_disk_component_colors(self):
+        all_component_labels = [item for sublist in self.disk_component_labels.values() for item in sublist]
+        for component_label in all_component_labels:
+            color_name = self.disk_component_colors[component_label]
+            self.galaxy.set_disk_component_spectral_weights(component_label, self.colors[color_name])
+
+    def setup_disk_component_colors_combobox(self):
+
+        self.disk_component_colors_combobox = self.window.findChild(QComboBox, 'diskComponentColorsComboBox')
+
+        @Slot(int)
+        def disk_component_colors_combobox_action(index):
+            # Update the name text and values of the adjustment controls
+            component_label = self.disk_components_combobox.currentText()
+            color_name = self.disk_component_colors_combobox.currentText()
+            if len(component_label.strip()) != 0 and len(color_name.strip()) != 0:
+                self.disk_component_colors[component_label] = color_name
+
+        self.disk_component_colors_combobox.currentIndexChanged.connect(disk_component_colors_combobox_action)
 
     def setup_disk_component_emissive_state_adjustment(self):
         self.disk_component_emissive_checkbox = self.window.findChild(QCheckBox, 'diskComponentEmissiveCheckBox')
@@ -584,7 +616,9 @@ class MainWindow(QObject):
 
     def setup_bulge_component_selection(self):
         self.bulge_component_labels = []
+        self.bulge_component_colors = {}
         self.setup_reset_bulge_component_parameters_button()
+        self.setup_bulge_component_colors_combobox()
         self.setup_bulge_components_combobox()
         self.setup_new_bulge_component_button()
         self.setup_remove_bulge_component_button()
@@ -634,6 +668,8 @@ class MainWindow(QObject):
                 # Update widget values, but make sure the setters don't update the component class attributes, which would be redundant
                 self.update_bulge_component_parameter_control_widget_values(bulge_component.get_params(), update_bulge_component_parameters=False)
 
+                self.bulge_component_colors_combobox.setCurrentIndex(self.bulge_component_colors_combobox.findText(self.bulge_component_colors[component_label]))
+
         self.bulge_components_combobox.currentIndexChanged.connect(bulge_components_combobox_action)
         self.set_bulge_component_parameter_control_widget_enabled_states(False) # Controls are disabled initially
 
@@ -649,6 +685,7 @@ class MainWindow(QObject):
                 component_label = component_label[:-1] + str(int(component_label[-1]) + 1)
 
             self.bulge_component_labels.append(component_label)
+            self.bulge_component_colors[component_label] = 'Default'
             self.galaxy.add_bulge_component(galaxy_generation.GalaxyBulgeComponent(component_label))
             self.bulge_components_combobox.addItem(component_label)
             self.bulge_components_combobox.setCurrentIndex(len(self.bulge_component_labels)-1)
@@ -667,6 +704,7 @@ class MainWindow(QObject):
                 return
             component_label = self.bulge_components_combobox.currentText()
             self.bulge_component_labels.remove(component_label)
+            self.bulge_component_colors.pop(component_label)
             self.galaxy.remove_bulge_component(component_label)
             self.bulge_components_combobox.removeItem(self.bulge_components_combobox.currentIndex())
             self.auto_generate_galaxy_image()
@@ -685,10 +723,13 @@ class MainWindow(QObject):
             new_component_label = self.bulge_component_name_line_edit.text()
             if len(new_component_label.strip()) == 0: # Skip updating if the line edit is empty
                 return
+            if len(self.bulge_component_labels) == 0: # Skip updating if no bulge components are shown
+                return
             if new_component_label in self.bulge_component_labels: # Skip updating if the new label already exists
                 return
             component_index = self.bulge_component_labels.index(current_component_label)
             self.bulge_component_labels[component_index] = new_component_label
+            self.bulge_component_colors[new_component_label] = self.bulge_component_colors.pop(current_component_label)
             self.galaxy.set_bulge_component_label(current_component_label, new_component_label)
             self.bulge_components_combobox.setItemText(self.bulge_components_combobox.currentIndex(), new_component_label)
 
@@ -728,6 +769,25 @@ class MainWindow(QObject):
             self.auto_generate_galaxy_image()
 
         self.bulge_component_active_checkbox.stateChanged.connect(bulge_component_active_checkbox_action)
+
+    def update_bulge_component_colors(self):
+        for component_label in self.bulge_component_labels:
+            color_name = self.bulge_component_colors[component_label]
+            self.galaxy.set_bulge_component_spectral_weights(component_label, self.colors[color_name])
+
+    def setup_bulge_component_colors_combobox(self):
+
+        self.bulge_component_colors_combobox = self.window.findChild(QComboBox, 'bulgeComponentColorsComboBox')
+
+        @Slot(int)
+        def bulge_component_colors_combobox_action(index):
+            # Update the name text and values of the adjustment controls
+            component_label = self.bulge_components_combobox.currentText()
+            color_name = self.bulge_component_colors_combobox.currentText()
+            if len(component_label.strip()) != 0 and len(color_name.strip()) != 0:
+                self.bulge_component_colors[component_label] = color_name
+
+        self.bulge_component_colors_combobox.currentIndexChanged.connect(bulge_component_colors_combobox_action)
 
     def setup_bulge_component_emissive_state_adjustment(self):
         self.bulge_component_emissive_checkbox = self.window.findChild(QCheckBox, 'bulgeComponentEmissiveCheckBox')
@@ -772,6 +832,7 @@ class MainWindow(QObject):
 
     def setup_visualization_control(self):
         self.setup_visualization_intensity_control()
+        self.setup_visualization_color_control()
 
     def setup_visualization_intensity_control(self):
         self.gamma = 1/2
@@ -789,15 +850,16 @@ class MainWindow(QObject):
             self.brightness = value
             self.auto_generate_galaxy_image()
 
-        setup_slider_and_spinbox(self.brightness_slider, self.brightness_spinbox, 0.05, 5, 0.05, brightness_setter)
+        brightness_range = (0.05, 5, 0.05)
+        setup_slider_and_spinbox(self.brightness_slider, self.brightness_spinbox, *brightness_range, brightness_setter)
 
         self.brightness_spinbox.setValue(self.brightness)
 
-        self.setup_fix_brightness_reference_checkbox()
+        self.setup_lock_brightness_reference_checkbox()
 
-    def setup_fix_brightness_reference_checkbox(self):
-        self.fix_brightness_reference_checkbox = self.window.findChild(QCheckBox, 'fixBrightnessReferenceCheckBox')
-        self.fix_brightness_reference_checkbox.setChecked(False)
+    def setup_lock_brightness_reference_checkbox(self):
+        self.lock_brightness_reference_checkbox = self.window.findChild(QCheckBox, 'lockBrightnessReferenceCheckBox')
+        self.lock_brightness_reference_checkbox.setChecked(False)
 
     def setup_visualization_gamma_adjustment(self):
 
@@ -808,15 +870,394 @@ class MainWindow(QObject):
             self.gamma = value
             self.auto_generate_galaxy_image()
 
-        setup_slider_and_spinbox(self.gamma_slider, self.gamma_spinbox, 0.1, 2, 0.02, gamma_setter)
+        gamma_range = (0.1, 2, 0.02)
+        setup_slider_and_spinbox(self.gamma_slider, self.gamma_spinbox, *gamma_range, gamma_setter)
 
         self.gamma_spinbox.setValue(self.gamma)
 
     def convert_intensity_to_image_values(self, intensity):
-        if self.max_intensity is None or not self.fix_brightness_reference_checkbox.isChecked():
+        if self.max_intensity is None or not self.lock_brightness_reference_checkbox.isChecked():
             self.max_intensity = np.max(intensity)
         image_values = image_utils.perform_liear_stretch(intensity, 0, self.max_intensity/self.brightness)
-        return image_utils.perform_gamma_correction(image_values, self.gamma)
+        return image_utils.clamp(image_utils.perform_gamma_correction(image_values, self.gamma), 0, 1)
+
+    def setup_visualization_color_control(self):
+
+        # Dicts using color setting types (RGB, HSB, blackbody) as keys
+        self.color_setting_radio_buttons = {} # Radio buttons for switching between color setting types
+        self.color_control_widgets = {} # Widgets that will be disabled when no colors exist
+        self.color_control_widget_setters = {} # Functions taking values for a given setting type and updates the corresponding widgets
+        self.color_getters = {} # Functions returning the RGB representation of the current color setting
+        self.color_setting_getters = {} # Functions returning the current color setting values
+        self.default_color_settings = {} # Default settings for each color setting type
+
+        # Dicts using color names as keys
+        self.colors = {} # RGB representation of each color
+        self.color_settings = {} # Each entry is a dict with settings for each setting type
+        self.active_color_setting_types = {} # Names of the setting types currently active for each color
+
+        self.default_active_color_setting_type = 'RGB'
+
+        self.setup_visualization_color_controls()
+        self.setup_visualization_color_selection()
+        self.setup_visualization_color_view()
+
+        self.add_color('Default')
+
+    def setup_visualization_color_selection(self):
+        self.setup_colors_combobox()
+        self.setup_new_color_button()
+        self.setup_remove_color_button()
+        self.setup_color_name_control()
+
+    def setup_visualization_color_controls(self):
+        self.setup_color_adjustment_stacked_widget()
+        self.setup_RGB_adjustment()
+        self.setup_HSV_adjustment()
+        self.setup_blackbody_adjustment()
+
+    def setup_visualization_color_view(self):
+        self.color_view_label = self.window.findChild(QLabel, 'colorViewLabel')
+        self.color_view_pixmap = QPixmap(self.color_view_label.width(), self.color_view_label.height())
+
+    def update_color_view(self, color_name):
+        R, G, B = tuple(self.colors[color_name])
+        R_int = int(round(R*255))
+        G_int = int(round(G*255))
+        B_int = int(round(B*255))
+        self.color_view_pixmap.fill(QColor(R_int, G_int, B_int))
+        self.color_view_label.setPixmap(self.color_view_pixmap)
+
+    def empty_color_view(self):
+        self.color_view_label.setPixmap(QPixmap())
+
+    def set_color_control_widget_enabled_states(self, enabled):
+        for widget_list in self.color_control_widgets.values():
+            for widget in widget_list:
+                widget.setEnabled(enabled)
+
+    def update_color_setting_widget_values(self, color_name):
+        self.disable_parameter_updates = True # We do not want to update the stored color values when setting widget values
+        for setting_type in self.color_control_widget_setters:
+            self.color_control_widget_setters[setting_type](*self.color_settings[color_name][setting_type])
+        self.disable_parameter_updates = False
+
+    def set_color_setting_widget_values_to_default(self):
+        self.disable_parameter_updates = True # We do not want to update the stored color values when setting widget values
+        for setting_type in self.color_control_widget_setters:
+            self.color_control_widget_setters[setting_type](*self.default_color_settings[setting_type])
+        self.disable_parameter_updates = False
+
+    def update_color_value(self, color_name):
+        self.colors[color_name] = self.color_getters[self.active_color_setting_types[color_name]]()
+        self.update_color_view(color_name)
+
+    def update_color_setting_values(self, color_name):
+        for setting_type in self.color_setting_getters:
+            self.color_settings[color_name][setting_type] = self.color_setting_getters[setting_type]()
+
+    def set_color_setting_values_to_default(self, color_name):
+        self.color_settings[color_name] = {key: list(self.default_color_settings[key]) for key in self.default_color_settings}
+
+    def show_color_settings(self, color_name):
+        self.disable_parameter_updates = True
+        self.color_setting_radio_buttons[self.active_color_setting_types[color_name]].toggle()
+        self.disable_parameter_updates = False
+
+    def show_default_color_settings(self):
+        self.disable_parameter_updates = True
+        self.color_setting_radio_buttons[self.default_active_color_setting_type].toggle()
+        self.disable_parameter_updates = False
+
+    def add_color(self, color_name, active_color_setting_type=None):
+        self.active_color_setting_types[color_name] = self.default_active_color_setting_type if active_color_setting_type is None else active_color_setting_type
+        self.set_color_setting_values_to_default(color_name)
+        self.set_color_setting_widget_values_to_default()
+        self.update_color_value(color_name)
+        self.colors_combobox.addItem(color_name)
+        self.colors_combobox.setCurrentIndex(len(self.colors) - 1)
+        self.disk_component_colors_combobox.addItem(color_name)
+        self.bulge_component_colors_combobox.addItem(color_name)
+
+    def setup_colors_combobox(self):
+
+        self.colors_combobox = self.window.findChild(QComboBox, 'colorsComboBox')
+
+        @Slot(int)
+        def colors_combobox_action(index):
+            # Update the name text and values of the adjustment controls
+            color_name = self.colors_combobox.currentText()
+            self.color_name_line_edit.setText(color_name)
+            if len(color_name.strip()) == 0: # Simply diable or reset the relevant widgets if there is no color
+                self.set_color_control_widget_enabled_states(False)
+                self.set_color_setting_widget_values_to_default()
+                self.show_default_color_settings()
+                self.empty_color_view()
+            else:
+                self.set_color_control_widget_enabled_states(True) # Make sure control widgets are enabled
+                self.update_color_setting_widget_values(color_name)
+                self.show_color_settings(color_name)
+                self.update_color_view(color_name)
+
+        self.colors_combobox.currentIndexChanged.connect(colors_combobox_action)
+        self.set_color_control_widget_enabled_states(False) # Controls are disabled initially
+
+    def setup_new_color_button(self):
+
+        self.new_color_button = self.window.findChild(QPushButton, 'newColorButton')
+
+        @Slot()
+        def new_color_button_action():
+
+            # Create a new color with a unique label
+            color_name = 'Color_1'
+            while color_name in self.colors: # Keep incrementing the index until the label is unique
+                color_name = color_name[:-1] + str(int(color_name[-1]) + 1)
+
+            old_color_name = self.colors_combobox.currentText()
+            if len(old_color_name.strip()) == 0:
+                active_color_setting_type = self.default_active_color_setting_type
+            else:
+                active_color_setting_type = self.active_color_setting_types[old_color_name]
+
+            self.add_color(color_name, active_color_setting_type)
+
+        self.new_color_button.clicked.connect(new_color_button_action)
+
+    def setup_remove_color_button(self):
+
+        self.remove_color_button = self.window.findChild(QPushButton, 'removeColorButton')
+
+        @Slot()
+        def remove_color_button_action():
+            # Remove the currently selected color
+            if len(self.colors) == 0: # Nothing to remove if no colors are shown
+                return
+            color_name = self.colors_combobox.currentText()
+            if color_name == 'Default':
+                return
+            self.colors.pop(color_name)
+            self.active_color_setting_types.pop(color_name)
+            self.color_settings.pop(color_name)
+            self.colors_combobox.removeItem(self.colors_combobox.currentIndex())
+
+            self.disk_component_colors_combobox.removeItem(self.disk_component_colors_combobox.findText(color_name))
+            self.bulge_component_colors_combobox.removeItem(self.bulge_component_colors_combobox.findText(color_name))
+
+            for component_label in self.disk_component_colors:
+                if self.disk_component_colors[component_label] == color_name:
+                    self.disk_component_colors[component_label] = 'Default'
+                    self.disk_component_colors_combobox.setCurrentIndex(0)
+
+            for component_label in self.bulge_component_colors:
+                if self.bulge_component_colors[component_label] == color_name:
+                    self.bulge_component_colors[component_label] = 'Default'
+                    self.bulge_component_colors_combobox.setCurrentIndex(0)
+
+        self.remove_color_button.clicked.connect(remove_color_button_action)
+
+    def setup_color_name_control(self):
+
+        self.color_name_line_edit = self.window.findChild(QLineEdit, 'colorNameLineEdit')
+        self.set_color_name_button = self.window.findChild(QPushButton, 'setColorNameButton')
+
+        @Slot()
+        def set_color_name_button_action():
+            # Update the current component label to the content of the line edit
+            current_color_name = self.colors_combobox.currentText()
+            new_color_name = self.color_name_line_edit.text()
+            if len(new_color_name.strip()) == 0: # Skip updating if the line edit is empty
+                return
+            if len(self.colors) == 0: # Skip updating if no colors are shown
+                return
+            if current_color_name == 'Default':
+                return
+            if new_color_name in self.colors: # Skip updating if the new name already exists
+                return
+            self.colors[new_color_name] = self.colors.pop(current_color_name)
+            self.active_color_setting_types[new_color_name] = self.active_color_setting_types.pop(current_color_name)
+            self.color_settings[new_color_name] = self.color_settings.pop(current_color_name)
+            self.colors_combobox.setItemText(self.colors_combobox.currentIndex(), new_color_name)
+
+            self.disk_component_colors_combobox.setItemText(self.disk_component_colors_combobox.findText(current_color_name), new_color_name)
+            self.bulge_component_colors_combobox.setItemText(self.bulge_component_colors_combobox.findText(current_color_name), new_color_name)
+
+            for component_label in self.disk_component_colors:
+                if self.disk_component_colors[component_label] == current_color_name:
+                    self.disk_component_colors[component_label] = new_color_name
+
+            for component_label in self.bulge_component_colors:
+                if self.bulge_component_colors[component_label] == current_color_name:
+                    self.bulge_component_colors[component_label] = new_color_name
+
+        self.set_color_name_button.clicked.connect(set_color_name_button_action)
+
+    def setup_color_adjustment_stacked_widget(self):
+        self.color_adjustment_stacked_widget = self.window.findChild(QStackedWidget, 'colorAdjustmentStackedWidget')
+
+    def setup_RGB_adjustment(self):
+        self.RGB_radio_button = self.window.findChild(QRadioButton, 'RGBRadioButton')
+
+        self.red_label = self.window.findChild(QLabel, 'redLabel')
+        self.red_slider = self.window.findChild(QSlider, 'redSlider')
+        self.red_spinbox = self.window.findChild(QDoubleSpinBox, 'redSpinBox')
+
+        self.green_label = self.window.findChild(QLabel, 'greenLabel')
+        self.green_slider = self.window.findChild(QSlider, 'greenSlider')
+        self.green_spinbox = self.window.findChild(QDoubleSpinBox, 'greenSpinBox')
+
+        self.blue_label = self.window.findChild(QLabel, 'blueLabel')
+        self.blue_slider = self.window.findChild(QSlider, 'blueSlider')
+        self.blue_spinbox = self.window.findChild(QDoubleSpinBox, 'blueSpinBox')
+
+        def RGB_widget_setter(R, G, B):
+            self.red_spinbox.setValue(R)
+            self.green_spinbox.setValue(G)
+            self.blue_spinbox.setValue(B)
+
+        def RGB_color_getter():
+            return [self.red_spinbox.value(), self.green_spinbox.value(), self.blue_spinbox.value()]
+
+        setting_type = 'RGB'
+        self.color_setting_radio_buttons[setting_type] = self.RGB_radio_button
+        self.color_control_widgets[setting_type] = [self.RGB_radio_button,
+                                                    self.red_label, self.red_slider, self.red_spinbox,
+                                                    self.green_label, self.green_slider, self.green_spinbox,
+                                                    self.blue_label, self.blue_slider, self.blue_spinbox]
+        self.color_control_widget_setters[setting_type] = RGB_widget_setter
+        self.color_getters[setting_type] = RGB_color_getter
+        self.color_setting_getters[setting_type] = RGB_color_getter
+        self.default_color_settings[setting_type] = [1, 1, 1]
+
+        def RGB_color_setter(RGB_index, value):
+            if not self.disable_parameter_updates:
+                color_name = self.colors_combobox.currentText()
+                self.colors[color_name][RGB_index] = value
+                self.color_settings[color_name][setting_type][RGB_index] = value
+                self.update_color_view(color_name)
+
+        @Slot(bool)
+        def RGB_radio_button_action(checked):
+            if checked:
+                self.color_adjustment_stacked_widget.setCurrentIndex(1)
+                color_name = self.colors_combobox.currentText()
+                if len(color_name.strip()) != 0:
+                    self.active_color_setting_types[color_name] = setting_type
+                    self.update_color_value(color_name)
+
+        self.RGB_radio_button.toggled.connect(RGB_radio_button_action)
+
+        RGB_range = (0, 1, 0.01)
+        setup_slider_and_spinbox(self.red_slider, self.red_spinbox, *RGB_range, lambda value: RGB_color_setter(0, value))
+        setup_slider_and_spinbox(self.green_slider, self.green_spinbox, *RGB_range, lambda value: RGB_color_setter(1, value))
+        setup_slider_and_spinbox(self.blue_slider, self.blue_spinbox, *RGB_range, lambda value: RGB_color_setter(2, value))
+
+    def setup_HSV_adjustment(self):
+        self.HSV_radio_button = self.window.findChild(QRadioButton, 'HSVRadioButton')
+
+        self.hue_label = self.window.findChild(QLabel, 'hueLabel')
+        self.hue_slider = self.window.findChild(QSlider, 'hueSlider')
+        self.hue_spinbox = self.window.findChild(QDoubleSpinBox, 'hueSpinBox')
+
+        self.saturation_label = self.window.findChild(QLabel, 'saturationLabel')
+        self.saturation_slider = self.window.findChild(QSlider, 'saturationSlider')
+        self.saturation_spinbox = self.window.findChild(QDoubleSpinBox, 'saturationSpinBox')
+
+        self.value_label = self.window.findChild(QLabel, 'valueLabel')
+        self.value_slider = self.window.findChild(QSlider, 'valueSlider')
+        self.value_spinbox = self.window.findChild(QDoubleSpinBox, 'valueSpinBox')
+
+        def HSV_widget_setter(H, S, V):
+            self.hue_spinbox.setValue(H)
+            self.saturation_spinbox.setValue(S)
+            self.value_spinbox.setValue(V)
+
+        def HSV_color_setting_getter():
+            return [self.hue_spinbox.value(), self.saturation_spinbox.value(), self.value_spinbox.value()]
+
+        def HSV_color_getter():
+            return list(spectrum_utils.RGB_from_HSV(*tuple(HSV_color_setting_getter())))
+
+        setting_type = 'HSV'
+        self.color_setting_radio_buttons[setting_type] = self.HSV_radio_button
+        self.color_control_widgets[setting_type] = [self.HSV_radio_button,
+                                                    self.hue_label, self.hue_slider, self.hue_spinbox,
+                                                    self.saturation_label, self.saturation_slider, self.saturation_spinbox,
+                                                    self.value_label, self.value_slider, self.value_spinbox]
+        self.color_control_widget_setters[setting_type] = HSV_widget_setter
+        self.color_getters[setting_type] = HSV_color_getter
+        self.color_setting_getters[setting_type] = HSV_color_setting_getter
+        self.default_color_settings[setting_type] = [0, 1, 1]
+
+        def HSV_color_setter(HSV_index, value):
+            if not self.disable_parameter_updates:
+                color_name = self.colors_combobox.currentText()
+                self.color_settings[color_name][setting_type][HSV_index] = value
+                self.colors[color_name] = HSV_color_getter()
+                self.update_color_view(color_name)
+
+        @Slot(bool)
+        def HSV_radio_button_action(checked):
+            if checked:
+                self.color_adjustment_stacked_widget.setCurrentIndex(2)
+                color_name = self.colors_combobox.currentText()
+                if len(color_name.strip()) != 0:
+                    self.active_color_setting_types[color_name] = setting_type
+                    self.update_color_value(color_name)
+
+        self.HSV_radio_button.toggled.connect(HSV_radio_button_action)
+
+        hue_range = (0, 360, 1)
+        SV_range = (0, 1, 0.01)
+        setup_slider_and_spinbox(self.hue_slider, self.hue_spinbox, *hue_range, lambda value: HSV_color_setter(0, value))
+        setup_slider_and_spinbox(self.saturation_slider, self.saturation_spinbox, *SV_range, lambda value: HSV_color_setter(1, value))
+        setup_slider_and_spinbox(self.value_slider, self.value_spinbox, *SV_range, lambda value: HSV_color_setter(2, value))
+
+    def setup_blackbody_adjustment(self):
+        self.blackbody_radio_button = self.window.findChild(QRadioButton, 'blackbodyRadioButton')
+
+        self.blackbody_temperature_label = self.window.findChild(QLabel, 'blackbodyTemperatureLabel')
+        self.blackbody_temperature_slider = self.window.findChild(QSlider, 'blackbodyTemperatureSlider')
+        self.blackbody_temperature_spinbox = self.window.findChild(QDoubleSpinBox, 'blackbodyTemperatureSpinBox')
+
+        def blackbody_widget_setter(temperature):
+            self.blackbody_temperature_spinbox.setValue(temperature)
+
+        def blackbody_color_setting_getter():
+            return [self.blackbody_temperature_spinbox.value()]
+
+        def blackbody_color_getter():
+            return list(spectrum_utils.RGB_from_blackbody_temperature(*tuple(blackbody_color_setting_getter())))
+
+        setting_type = 'blackbody'
+        self.color_setting_radio_buttons[setting_type] = self.blackbody_radio_button
+        self.color_control_widgets[setting_type] = [self.blackbody_radio_button,
+                                                    self.blackbody_temperature_label, self.blackbody_temperature_slider, self.blackbody_temperature_spinbox]
+        self.color_control_widget_setters[setting_type] = blackbody_widget_setter
+        self.color_getters[setting_type] = blackbody_color_getter
+        self.color_setting_getters[setting_type] = blackbody_color_setting_getter
+        self.default_color_settings[setting_type] = [4000]
+
+        def blackbody_color_setter(value):
+            if not self.disable_parameter_updates:
+                color_name = self.colors_combobox.currentText()
+                self.color_settings[color_name][setting_type] = [value]
+                self.colors[color_name] = blackbody_color_getter()
+                self.update_color_view(color_name)
+
+        @Slot(bool)
+        def blackbody_radio_button_action(checked):
+            if checked:
+                self.color_adjustment_stacked_widget.setCurrentIndex(0)
+                color_name = self.colors_combobox.currentText()
+                if len(color_name.strip()) != 0:
+                    self.active_color_setting_types[color_name] = setting_type
+                    self.update_color_value(color_name)
+
+        self.blackbody_radio_button.toggled.connect(blackbody_radio_button_action)
+
+        blackbody_temperature_range = (1000, 12000, 100)
+        setup_slider_and_spinbox(self.blackbody_temperature_slider, self.blackbody_temperature_spinbox, *blackbody_temperature_range, blackbody_color_setter)
 
 
 def setup_slider_and_spinbox(slider, spinbox, minimum_value, maximum_value, step, value_setter, logarithmic=False):
