@@ -20,15 +20,19 @@
    <layout class="QGridLayout" name="gridLayout_4">
     <item row="1" column="0">
      <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="3">
+       <widget class="QDoubleSpinBox" name="polarAngleSpinBox">
+        <property name="decimals">
+         <number>0</number>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="0">
        <widget class="QLabel" name="polarAngleLabel">
         <property name="text">
          <string>Polar angle</string>
         </property>
        </widget>
-      </item>
-      <item row="0" column="3">
-       <widget class="QDoubleSpinBox" name="polarAngleSpinBox"/>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="azimuthAngleLabel">
@@ -38,7 +42,11 @@
        </widget>
       </item>
       <item row="1" column="3">
-       <widget class="QDoubleSpinBox" name="azimuthAngleSpinBox"/>
+       <widget class="QDoubleSpinBox" name="azimuthAngleSpinBox">
+        <property name="decimals">
+         <number>0</number>
+        </property>
+       </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="scaleLabel">
@@ -112,6 +120,34 @@
        </widget>
       </item>
      </layout>
+    </item>
+    <item row="0" column="1" rowspan="2">
+     <widget class="QLabel" name="galaxyFrameLabel">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>600</width>
+        <height>600</height>
+       </size>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="scaledContents">
+       <bool>false</bool>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
     </item>
     <item row="0" column="0">
      <widget class="QTabWidget" name="tabWidget">
@@ -262,7 +298,7 @@
          <string>Reset</string>
         </property>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>6</x>
@@ -339,18 +375,28 @@
              </property>
             </widget>
            </item>
+           <item row="3" column="2">
+            <widget class="QComboBox" name="diskComponentColorsComboBox"/>
+           </item>
+           <item row="3" column="0" colspan="2">
+            <widget class="QLabel" name="diskComponentColorLabel">
+             <property name="text">
+              <string>Color</string>
+             </property>
+            </widget>
+           </item>
           </layout>
          </item>
          <item>
           <widget class="QTabWidget" name="diskComponentParameterTabWidget">
            <property name="currentIndex">
-            <number>0</number>
+            <number>1</number>
            </property>
            <widget class="QWidget" name="structureTab">
             <attribute name="title">
              <string>Structure</string>
             </attribute>
-            <widget class="QWidget" name="">
+            <widget class="QWidget" name="layoutWidget">
              <property name="geometry">
               <rect>
                <x>11</x>
@@ -469,141 +515,11 @@
                <x>1</x>
                <y>10</y>
                <width>391</width>
-               <height>291</height>
+               <height>254</height>
               </rect>
              </property>
              <layout class="QGridLayout" name="gridLayout_6">
-              <item row="0" column="0">
-               <layout class="QHBoxLayout" name="horizontalLayout">
-                <item>
-                 <widget class="QLabel" name="diskComponentNumberOfOctavesLabel">
-                  <property name="text">
-                   <string>Octaves</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QSpinBox" name="diskComponentNumberOfOctavesSpinBox"/>
-                </item>
-               </layout>
-              </item>
-              <item row="1" column="0">
-               <widget class="QLabel" name="diskComponentInitialFrequencyLabel">
-                <property name="text">
-                 <string>Initial frequency</string>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="1">
-               <widget class="QSlider" name="diskComponentInitialFrequencySlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="2">
-               <widget class="QDoubleSpinBox" name="diskComponentInitialFrequencySpinBox"/>
-              </item>
-              <item row="2" column="0">
-               <widget class="QLabel" name="diskComponentLacunarityLabel">
-                <property name="text">
-                 <string>Lacunarity</string>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="1">
-               <widget class="QSlider" name="diskComponentLacunaritySlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="2">
-               <widget class="QDoubleSpinBox" name="diskComponentLacunaritySpinBox"/>
-              </item>
-              <item row="3" column="0">
-               <widget class="QLabel" name="diskComponentPersistenceLabel">
-                <property name="text">
-                 <string>Persistence</string>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="1">
-               <widget class="QSlider" name="diskComponentPersistenceSlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="2">
-               <widget class="QDoubleSpinBox" name="diskComponentPersistenceSpinBox"/>
-              </item>
-              <item row="4" column="0">
-               <widget class="QLabel" name="diskComponentNoiseThresholdLabel">
-                <property name="text">
-                 <string>Threshold</string>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="1">
-               <widget class="QSlider" name="diskComponentNoiseThresholdSlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="2">
-               <widget class="QDoubleSpinBox" name="diskComponentNoiseThresholdSpinBox"/>
-              </item>
-              <item row="5" column="0">
-               <widget class="QLabel" name="diskComponentNoiseCutoffLabel">
-                <property name="text">
-                 <string>Cutoff</string>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="1">
-               <widget class="QSlider" name="diskComponentNoiseCutoffSlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="2">
-               <widget class="QDoubleSpinBox" name="diskComponentNoiseCutoffSpinBox"/>
-              </item>
-              <item row="6" column="0">
-               <widget class="QLabel" name="diskComponentNoiseExponentLabel">
-                <property name="text">
-                 <string>Exponent</string>
-                </property>
-               </widget>
-              </item>
-              <item row="6" column="1">
-               <widget class="QSlider" name="diskComponentNoiseExponentSlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
               <item row="6" column="2">
-               <widget class="QDoubleSpinBox" name="diskComponentNoiseExponentSpinBox"/>
-              </item>
-              <item row="7" column="0">
-               <widget class="QLabel" name="diskComponentNoiseOffsetLabel">
-                <property name="text">
-                 <string>Offset</string>
-                </property>
-               </widget>
-              </item>
-              <item row="7" column="1">
-               <widget class="QSlider" name="diskComponentNoiseOffsetSlider">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="7" column="2">
                <widget class="QDoubleSpinBox" name="diskComponentNoiseOffsetSpinBox"/>
               </item>
               <item row="0" column="1" colspan="2">
@@ -630,6 +546,119 @@
                 </item>
                </layout>
               </item>
+              <item row="6" column="1">
+               <widget class="QSlider" name="diskComponentNoiseOffsetSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="6" column="0">
+               <widget class="QLabel" name="diskComponentNoiseOffsetLabel">
+                <property name="text">
+                 <string>Offset</string>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseExponentSpinBox"/>
+              </item>
+              <item row="5" column="1">
+               <widget class="QSlider" name="diskComponentNoiseExponentSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentInitialFrequencySpinBox"/>
+              </item>
+              <item row="4" column="1">
+               <widget class="QSlider" name="diskComponentNoiseCutoffSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseThresholdSpinBox"/>
+              </item>
+              <item row="4" column="0">
+               <widget class="QLabel" name="diskComponentNoiseCutoffLabel">
+                <property name="text">
+                 <string>Cutoff</string>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentNoiseCutoffSpinBox"/>
+              </item>
+              <item row="5" column="0">
+               <widget class="QLabel" name="diskComponentNoiseExponentLabel">
+                <property name="text">
+                 <string>Exponent</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QDoubleSpinBox" name="diskComponentPersistenceSpinBox"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="diskComponentNoiseThresholdLabel">
+                <property name="text">
+                 <string>Threshold</string>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QSlider" name="diskComponentNoiseThresholdSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QSlider" name="diskComponentPersistenceSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="diskComponentPersistenceLabel">
+                <property name="text">
+                 <string>Persistence</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSlider" name="diskComponentInitialFrequencySlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <layout class="QHBoxLayout" name="horizontalLayout">
+                <item>
+                 <widget class="QLabel" name="diskComponentNumberOfOctavesLabel">
+                  <property name="text">
+                   <string>Octaves</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSpinBox" name="diskComponentNumberOfOctavesSpinBox"/>
+                </item>
+               </layout>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="diskComponentInitialFrequencyLabel">
+                <property name="text">
+                 <string>Initial frequency</string>
+                </property>
+               </widget>
+              </item>
              </layout>
             </widget>
            </widget>
@@ -655,16 +684,23 @@
          <string>Reset</string>
         </property>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>9</x>
           <y>30</y>
           <width>391</width>
-          <height>81</height>
+          <height>97</height>
          </rect>
         </property>
         <layout class="QGridLayout" name="gridLayout_7">
+         <item row="1" column="0">
+          <widget class="QLabel" name="bulgeComponentNameLabel">
+           <property name="text">
+            <string>Name</string>
+           </property>
+          </widget>
+         </item>
          <item row="0" column="0">
           <widget class="QLabel" name="bulgeComponentsLabel">
            <property name="text">
@@ -682,13 +718,6 @@
            </property>
           </widget>
          </item>
-         <item row="0" column="2">
-          <widget class="QPushButton" name="newBulgeComponentButton">
-           <property name="text">
-            <string>New</string>
-           </property>
-          </widget>
-         </item>
          <item row="0" column="3">
           <widget class="QPushButton" name="removeBulgeComponentButton">
            <property name="text">
@@ -696,10 +725,10 @@
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="bulgeComponentNameLabel">
+         <item row="0" column="2">
+          <widget class="QPushButton" name="newBulgeComponentButton">
            <property name="text">
-            <string>Name</string>
+            <string>New</string>
            </property>
           </widget>
          </item>
@@ -720,9 +749,19 @@
            </property>
           </widget>
          </item>
+         <item row="2" column="1">
+          <widget class="QComboBox" name="bulgeComponentColorsComboBox"/>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="bulgeComponentColorLabel">
+           <property name="text">
+            <string>Color</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>10</x>
@@ -784,7 +823,7 @@
        <attribute name="title">
         <string>Visualization</string>
        </attribute>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>10</x>
@@ -829,51 +868,292 @@
           <widget class="QDoubleSpinBox" name="brightnessSpinBox"/>
          </item>
          <item row="2" column="0" colspan="2">
-          <widget class="QCheckBox" name="fixBrightnessReferenceCheckBox">
+          <widget class="QCheckBox" name="lockBrightnessReferenceCheckBox">
            <property name="text">
-            <string>Fix brightness reference</string>
+            <string>Lock brightness reference</string>
            </property>
           </widget>
          </item>
         </layout>
        </widget>
-       <zorder>gammaLabel</zorder>
-       <zorder>gammaSlider</zorder>
-       <zorder>gammaSpinBox</zorder>
-       <zorder>brightnessLabel</zorder>
-       <zorder>brightnessSpinBox</zorder>
-       <zorder>brightnessSlider</zorder>
-       <zorder>fixBrightnessReferenceCheckBox</zorder>
-       <zorder>galaxyFrameLabel</zorder>
+       <widget class="QWidget" name="">
+        <property name="geometry">
+         <rect>
+          <x>15</x>
+          <y>190</y>
+          <width>381</width>
+          <height>221</height>
+         </rect>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <item>
+          <layout class="QGridLayout" name="gridLayout_10">
+           <item row="0" column="1" rowspan="2">
+            <widget class="QComboBox" name="colorsComboBox"/>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="colorNameLabel">
+             <property name="text">
+              <string>Name</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QLineEdit" name="colorNameLineEdit"/>
+           </item>
+           <item row="0" column="0" rowspan="2">
+            <widget class="QLabel" name="colorsLabel">
+             <property name="text">
+              <string>Colors</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2" rowspan="2">
+            <widget class="QPushButton" name="newColorButton">
+             <property name="text">
+              <string>New</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="3" rowspan="2">
+            <widget class="QPushButton" name="removeColorButton">
+             <property name="text">
+              <string>Remove</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="2">
+            <widget class="QPushButton" name="setColorNameButton">
+             <property name="text">
+              <string>Set</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="3">
+            <widget class="QLabel" name="colorViewLabel">
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QGridLayout" name="gridLayout_14">
+           <item row="0" column="2">
+            <widget class="QRadioButton" name="HSVRadioButton">
+             <property name="text">
+              <string>HSV</string>
+             </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup</string>
+             </attribute>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QRadioButton" name="RGBRadioButton">
+             <property name="text">
+              <string>RGB</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup</string>
+             </attribute>
+            </widget>
+           </item>
+           <item row="0" column="3">
+            <widget class="QRadioButton" name="blackbodyRadioButton">
+             <property name="text">
+              <string>Blackbody</string>
+             </property>
+             <attribute name="buttonGroup">
+              <string notr="true">buttonGroup</string>
+             </attribute>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QStackedWidget" name="colorAdjustmentStackedWidget">
+           <property name="currentIndex">
+            <number>1</number>
+           </property>
+           <widget class="QWidget" name="blackbodyPage">
+            <widget class="QWidget" name="">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>10</y>
+               <width>381</width>
+               <height>31</height>
+              </rect>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_12">
+              <item row="0" column="0">
+               <widget class="QLabel" name="blackbodyTemperatureLabel">
+                <property name="text">
+                 <string>Temperature</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QSlider" name="blackbodyTemperatureSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QDoubleSpinBox" name="blackbodyTemperatureSpinBox">
+                <property name="decimals">
+                 <number>0</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </widget>
+           <widget class="QWidget" name="RGBPage">
+            <widget class="QWidget" name="">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>7</y>
+               <width>381</width>
+               <height>101</height>
+              </rect>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_13">
+              <item row="2" column="2">
+               <widget class="QDoubleSpinBox" name="blueSpinBox"/>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSlider" name="greenSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="blueLabel">
+                <property name="text">
+                 <string>Blue</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <widget class="QLabel" name="redLabel">
+                <property name="text">
+                 <string>Red</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QDoubleSpinBox" name="redSpinBox"/>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="greenLabel">
+                <property name="text">
+                 <string>Green</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QSlider" name="redSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QSlider" name="blueSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QDoubleSpinBox" name="greenSpinBox"/>
+              </item>
+             </layout>
+            </widget>
+           </widget>
+           <widget class="QWidget" name="HSVPage">
+            <widget class="QWidget" name="">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>7</y>
+               <width>381</width>
+               <height>101</height>
+              </rect>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_11">
+              <item row="0" column="0">
+               <widget class="QLabel" name="hueLabel">
+                <property name="text">
+                 <string>Hue</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QSlider" name="hueSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QDoubleSpinBox" name="hueSpinBox">
+                <property name="decimals">
+                 <number>0</number>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="saturationLabel">
+                <property name="text">
+                 <string>Saturation</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSlider" name="saturationSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QDoubleSpinBox" name="saturationSpinBox"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="valueLabel">
+                <property name="text">
+                 <string>Value</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QSlider" name="valueSlider">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="2">
+               <widget class="QDoubleSpinBox" name="valueSpinBox"/>
+              </item>
+             </layout>
+            </widget>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </widget>
-     </widget>
-    </item>
-    <item row="0" column="1" rowspan="2">
-     <widget class="QLabel" name="galaxyFrameLabel">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>600</width>
-        <height>600</height>
-       </size>
-      </property>
-      <property name="autoFillBackground">
-       <bool>false</bool>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-      <property name="scaledContents">
-       <bool>false</bool>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-      </property>
      </widget>
     </item>
    </layout>
@@ -892,4 +1172,7 @@
  </widget>
  <resources/>
  <connections/>
+ <buttongroups>
+  <buttongroup name="buttonGroup"/>
+ </buttongroups>
 </ui>
