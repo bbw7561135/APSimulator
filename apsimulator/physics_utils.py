@@ -10,6 +10,7 @@ speed_of_light = 2.99792458e8 # [m/s]
 boltzmann_constant = 1.38064852e-23 # [J/K]
 stefan_boltzmann_constant = 5.670367e-8 # [W/m^2/K^4]
 light_year = 9.4607304725808e15 # [m]
+wien_constant = 2.8977729e-3 # [m K]
 
 solar_mass = 1.98847e30 # [kg]
 solar_radius = 6.957e8 # [m]
@@ -50,6 +51,26 @@ def V_band_magnitude_from_bortle_class(bortle_class, field_of_view_solid_angle):
 def compute_blackbody_spectral_fluxes(wavelengths, temperature):
     return (2*np.pi*planck_constant*speed_of_light**2)/((np.exp((planck_constant*speed_of_light/boltzmann_constant)/(wavelengths*temperature)) - 1)
                                                          *wavelengths**5)
+
+
+def compute_blackbody_peak_wavelength(temperature):
+    return wien_constant/temperature
+
+
+def compute_blackbody_total_flux(temperature):
+    return stefan_boltzmann_constant*temperature**4
+
+
+def compute_peak_normalized_blackbody_spectral_fluxes(wavelengths, temperature):
+    spectral_fluxes = compute_blackbody_spectral_fluxes(wavelengths, temperature)
+    peak_spectral_flux = compute_blackbody_spectral_fluxes(compute_blackbody_peak_wavelength(temperature), temperature)
+    return spectral_fluxes/peak_spectral_flux
+
+
+def compute_flux_normalized_blackbody_spectral_fluxes(wavelengths, temperature):
+    spectral_fluxes = compute_blackbody_spectral_fluxes(wavelengths, temperature)
+    integrated_spectral_flux = compute_blackbody_total_flux(temperature)
+    return spectral_fluxes/integrated_spectral_flux
 
 
 class StarPopulation:
@@ -195,7 +216,7 @@ class BlackbodyStars:
                                                              *self.wavelengths[:, np.newaxis]**5)
 
     def compute_emitted_total_fluxes(self):
-        return stefan_boltzmann_constant*self.temperatures**4
+        return compute_blackbody_total_flux(self.temperatures)
 
     def compute_surface_areas(self):
         return self.luminosities/self.compute_emitted_total_fluxes()
