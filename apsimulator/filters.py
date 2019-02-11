@@ -18,19 +18,19 @@ class FilterSet:
     '''
     def __init__(self, *filter_list):
         assert self.contains_only_filters(filter_list)
-        self.filters = collections.OrderedDict([(filter_.label, filter_) for filter_ in filter_list])
+        self.filters = collections.OrderedDict([(filter_.get_label(), filter_) for filter_ in filter_list])
         self.n_filters = len(self.filters)
 
     def add_filter(self, new_filter):
         assert isinstance(new_filter, Filter)
-        self.filters[new_filter.label] = new_filter
+        self.filters[new_filter.get_label()] = new_filter
         self.n_filters += 1
 
     def add_filter_on_top(self, new_filter):
         if self.is_empty():
             self.add_filter(new_filter)
         else:
-            self.filters = collections.OrderedDict([(filter_.label, filter_.create_merged_filter(new_filter, filter_.label))
+            self.filters = collections.OrderedDict([(filter_.get_label(), filter_.create_merged_filter(new_filter, filter_.get_label()))
                                                     for filter_ in self.filters.values()])
 
     def compute_filtered_image_field(self, image_field, convert_to_photon_rates=False, use_memmap=False):
@@ -67,7 +67,7 @@ class FilterSet:
         if self.is_empty():
             return FilterSet(new_filter)
         else:
-            return FilterSet(*(filter_.create_merged_filter(new_filter, filter_.label) for filter_ in self.filters.values()))
+            return FilterSet(*(filter_.create_merged_filter(new_filter, filter_.get_label()) for filter_ in self.filters.values()))
 
     def contains_only_filters(self, filter_list):
         return len(list(filter(lambda filter_: not isinstance(filter_, Filter), filter_list))) == 0
@@ -85,7 +85,7 @@ class FilterSet:
 
         fig, ax = plot_utils.subplots()
         for filter_ in self.filters.values():
-            ax.plot(wavelengths*1e9, filter_.compute_transmittances_for_wavelengths(wavelengths), label=filter_.label)
+            ax.plot(wavelengths*1e9, filter_.compute_transmittances_for_wavelengths(wavelengths), label=filter_.get_label())
         ax.set_xlabel('Wavelength [nm]')
         ax.set_ylabel('Transmittance')
         ax.legend(loc='best')
@@ -98,8 +98,8 @@ class FilterSet:
             minimum_wavelength = 0
             maximum_wavelength = np.inf
         else:
-            minimum_wavelength = min([filter_.minimum_wavelength for filter_ in self.filters.values()])
-            maximum_wavelength = max([filter_.maximum_wavelength for filter_ in self.filters.values()])
+            minimum_wavelength = min([filter_.get_minimum_wavelength() for filter_ in self.filters.values()])
+            maximum_wavelength = max([filter_.get_maximum_wavelength() for filter_ in self.filters.values()])
         return minimum_wavelength, maximum_wavelength
 
     def get_filter(self, filter_label):
@@ -205,6 +205,21 @@ class Filter:
     def get_wavelength_range(self):
         return self.minimum_wavelength, self.maximum_wavelength
 
+    def get_label(self):
+        return self.label
+
+    def get_minimum_wavelength(self):
+        return self.minimum_wavelength
+
+    def get_maximum_wavelength(self):
+        return self.maximum_wavelength
+
+    def get_wavelengths(self):
+        return self.wavelengths
+
+    def get_transmittances(self):
+        return self.transmittances
+
 
 def create_filter_from_file(input_path, filter_label=None, wavelength_scale=1e-9):
 
@@ -226,6 +241,7 @@ def create_filter_from_file(input_path, filter_label=None, wavelength_scale=1e-9
                 transmittances.append(float(words[1]))
 
     return Filter(filter_label, transmittances=transmittances, wavelengths=wavelengths)
+
 
 V_band_filter = None
 
